@@ -1,0 +1,11 @@
+{
+  "name": "dive-inat-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:grabber": "node test-grabber.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.49.1"
+  }
+}

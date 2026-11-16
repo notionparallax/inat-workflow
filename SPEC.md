@@ -1,0 +1,506 @@
+# Dive video → iNaturalist: specification
+
+Status: draft v0.6 (2026-11-16). First build (v0.1.0) in this repository.
+
+## 1. Purpose
+
+Divers who film with a head-mounted camera collect hours of footage full of organisms worth recording on iNaturalist. Turning that footage into observations by hand currently takes a couple of hours per dive, so only the most exciting sightings get recorded. Most of the metadata needed (time, depth, water temperature, entry location) already exists in the dive computer's log.
+
+This tool lets a user watch a dive video on YouTube, mark organisms as they appear, choose sharp frames, and upload each one as an iNaturalist observation. Time, depth, temperature and location are filled in automatically from the dive log. Identification happens afterwards, on iNaturalist, by the uploader and the iNat community.
+
+A secondary aim is scientific. A marine scientist collaborator wants research-grade records and an analysable dataset, especially of marine plants and algae, which iNat's mostly animal-focused users under-record. Lowering the cost per observation should raise the number and variety of observations per dive. A paper with the scientist will be about the resulting data; the tool will appear in its methods, not as its subject.
+
+## 2. Principles
+
+1. **Thin.** iNaturalist is the record. The tool doesn't identify species, doesn't archive, doesn't export datasets and doesn't duplicate any iNat feature. Its only job is producing well-formed observations quickly.
+2. **No video hosting or handling.** Videos stay on YouTube. Users can't upload video files, and the tool never downloads video files.
+3. **Permission first.** The person capturing frames may not own the video. They must confirm explicit permission from the video's owner before uploading anything.
+4. **Credit both people.** The diver who observed the organism and the person who captured the frames are credited separately.
+5. **Assume nothing the data doesn't say.** Annotations stay unset unless the user sets them. Values derived from the log (such as interpolated depth) are labelled as derived.
+
+## 3. Users and roles
+
+| Role | Description |
+| --- | --- |
+| **Diver (observer)** | Filmed the dive and owns the video and dive log. May also be the capturer. |
+| **Capturer** | Uses the tool to make observations. Uploads under their own iNat account. Needs the diver's permission and dive log. |
+| **Consumer (e.g. the scientist)** | Doesn't use the tool. Works from the resulting observations on iNaturalist, typically through an iNat project. |
+
+Initial users: the author and one marine scientist. Target users: anyone who wants iNat observations from continuous video, not only divers. Diving-specific features (the dive log) should be optional where practical.
+
+## 4. Scope by phase
+
+### Version 1 (local, single user)
+
+- Runs on the user's computer: a Svelte front end and a Python back end on `localhost`, plus the frame grabber extension (§7.2) loaded unpacked in Chrome or Edge.
+- Inputs: a YouTube URL, a Subsurface `.ssrf` file containing a single dive, and a pasted iNat API token.
+- Manual video ↔ log sync (two-point click, or dragging the profile along the timeline).
+- Depth profile under the video timeline, clickable to jump the video.
+- Modal observation workflow: start → capture frames → set annotations → complete → upload.
+- Frame capture with burst + automatic sharpness ranking (see §7).
+- Upload of stills with time, location, depth, temperature, notes template, observation fields and annotations.
+- A timestamped YouTube link in every observation's notes.
+- Subject position (*x*% / *y*%) on each still, written into the notes.
+- YouTube chapter titles generated from settled identifications, as copy-paste text.
+- Timeline markers for captured observations and shading for reviewed sections, saved in browser storage.
+- Keyboard-first controls.
+
+### Version 1.5
+
+- Animated GIF built from a range of frames, uploaded as the first photo.
+- Downloading an observation's captured frames as a bundle, so they can be reused later.
+
+### Version 2
+
+- OAuth login with iNaturalist (app registered under the author's account).
+- Hosted deployment (still no video storage or processing on the server).
+- Optional colour correction for underwater colour casts.
+- No-log mode for video without a dive log (e.g. non-divers): time from a manually entered start time, location set on iNat (as in §9.10), and no depth or temperature.
+
+### Later / not decided
+
+- Multiple dives in one video, and one dive across several videos.
+- Drift dives (location interpolated along the route by elapsed time).
+- Writing media or iNat links back into the Subsurface log.
+- Adding frames to an observation after it has been completed.
+- Duplicates across capturers: showing other people's iNat observations of the same video on the timeline (found by searching for the video link, as in §12.1).
+- Dive computers other than Shearwater via Subsurface; other log formats.
+
+## 5. System overview
+
+```txt
+┌──────────────────────── Browser (Svelte)   ────────────────────────┐
+│  YouTube IFrame player    │  Filmstrip / observation form          │
+│  Timeline + depth profile │  Settings, permission, token           │
+│        ▲ frames + media times (postMessage)                        │
+│  ┌─────┴──────────────────────┐                                    │
+│  │ Frame grabber extension    │  runs inside the YouTube embed     │
+│  │ (content script, §7)       │  frame only                        │
+│  └────────────────────────────┘   frames → memory / IndexedDB      │
+└───────────────┬────────────────────────────────────────────────────┘
+                │ HTTP (localhost)
+┌───────────────▼──────── Python back end (FastAPI) ─────────────────┐
+│  .ssrf parser       │  GIF encoder (v1.5)  │  iNat client          │
+│  sync maths         │  JPEG encoding       │  (pyinaturalist,      │
+│  time zone from GPS │                      │   throttling, retry)  │
+└────────────────────────────────────────────────────────────────────┘
+                │ HTTPS
+          api.inaturalist.org
+```
+
+The back end holds the iNat token, so the browser never sends it anywhere except `localhost`. Once the tool is hosted (v2), the same back end does the OAuth token exchange.
+
+**Is Python needed for GIFs?** No. GIFs can be encoded in the browser (e.g. `gifenc`, or a WebAssembly build of `gifski`). Python is used because the back end exists anyway for the token, uploads and log parsing, and Python encoders (Pillow, or `gifski`/ffmpeg called as subprocesses) give good palette quality with little effort. This choice can be revisited.
+
+## 6. Inputs
+
+### 6.1 YouTube video
+
+- Entered as a URL. Embedded with the YouTube IFrame Player API.
+- The tool asks the user to select the highest playback quality (ideally 2160p) and warns if the resolution actually playing is below the source (§7.2).
+- The video must allow embedding, and must be public or unlisted (private videos can't be embedded).
+- Video ID is the key for all saved state.
+
+### 6.2 Dive log (Subsurface `.ssrf`)
+
+The user exports a single dive from Subsurface (desktop or mobile). A capturer who isn't the diver gets this file from the diver.
+
+Checked against a real export (`gordons_dive.ssrf`, Perdix 2, firmware 102, Subsurface log format version 3). The parser reads:
+
+| Data | Where in `.ssrf` | Use |
+| --- | --- | --- |
+| Dive start date and time (local, no time zone) | `<dive date='2026-11-15' time='08:31:19'>` | Observation time |
+| Duration | `<dive duration='112:20 min'>` | Sync check |
+| Dive number | `<dive number='235'>` | Notes (optional) |
+| Depth samples | `<sample time='m:ss min' depth='x.x m'>`, every 10 s | Depth profile; per-observation depth |
+| Water temperature | `temp='20.0 C'` on a sample, **written only when it changes**, so carried forward to later samples. Summary in `<temperature water='…'>` | Per-observation temperature |
+| Max and mean depth | `<depth max='…' mean='…'>` | Notes (optional) |
+| Start and end GPS position from the dive computer | `<extradata key='Start location' value='lat, lon'>` and `key='End location'` | Observation location (preferred) |
+| Dive site name and GPS position | `<divesites><site name='…' gps='lat lon'>`, linked by `<dive divesiteid='…'>` | Site name in notes; position as fallback |
+
+Ignored: tank pressures, gas events, deco data, fingerprints, filter presets, buddy and suit.
+
+Findings from the sample:
+
+- **Two positions.** The dive computer's start location and the Subsurface dive site's position differ by ≈43 m. The parser prefers the computer's start location, because it's recorded for this specific dive, and falls back to the site position. Start and end locations are also the basis for drift dives later (§4).
+- **Temperature.** Only one temperature value was written for the whole dive (20.0 °C), probably because the Perdix records whole degrees and the water didn't change by a full degree. So the temperature is coarse, and the notes should give it to whole degrees.
+- **No compass data** is stored.
+- **Start and end of the dive.** The first sample (0:10) is at 0.0 m, and samples continue at 0.0 m for over a minute after surfacing (112:40–114:00). The descent and ascent anchors for sync (§8.2) are the first and last samples deeper than a threshold (default 1 m), not the first and last samples.
+- **One dive per file** is expected. If a file contains several dives or several dive computers, the tool asks which to use.
+
+A dive with no GPS fix is still accepted (§9.10).
+
+### 6.3 Settings (saved in browser storage)
+
+- iNat API token (v1).
+- Observer name (the diver), shown in notes.
+- Capturer name, defaulting to the iNat username.
+- Location accuracy, default **150 m**.
+- Observation field IDs for depth and water temperature (see §9.4).
+- Optional iNat project ID to add observations to.
+- Notes free text (e.g. a citation or project statement).
+- Detail crop size (§9.9).
+
+The licence is not a capturer setting; it's chosen per video with the owner's permission (§9.6, §15).
+
+## 7. Frame capture
+
+This is the hardest technical problem, and the approach needs proving with a prototype first.
+
+### 7.1 The constraint
+
+A web page cannot read pixels from an embedded YouTube player. The player is a cross-origin iframe, so the browser blocks access to it. The IFrame API controls playback but doesn't expose frames. Downloading the video is ruled out (§2).
+
+### 7.2 Chosen approach: a small helper extension
+
+The web page remains the app. A small companion browser extension (the "frame grabber") does one job: read frames from the embedded player.
+
+- **Where it runs.** A content script injected only into YouTube embed frames (`youtube.com/embed/*`, `youtube-nocookie.com/embed/*`, `all_frames: true`), and only when the parent page is the tool's own origin (checked with `location.ancestorOrigins`). It does nothing on youtube.com itself or on any other site.
+- **How it reads frames.** Inside the player's frame, the script can reach the `<video>` element directly. It draws the current frame to a canvas at the decoded resolution (`videoWidth × videoHeight`; 3840 × 2160 when YouTube is playing 2160p), independent of screen size.
+- **Exact frame times.** It reads and sets `video.currentTime` directly and uses `requestVideoFrameCallback` to get each frame's exact media time.
+- **Messaging.** The page and extension talk with `postMessage`, restricted to the tool's origin. The page sends commands (`grab`, `burst`, `step`, `status`), and the extension returns frames as transferable `ImageBitmap`s or JPEG blobs, each with its media time.
+- **Status.** The page detects whether the extension is present and shows a clear install prompt if not. It also reports the resolution actually being played, and warns if it's below the source (e.g. playing 1080p of a 4K upload). The player keeps its normal controls so the user can choose 2160p in the quality menu.
+- **Size.** Roughly 100–200 lines plus a manifest, with no settings, network access or storage of its own.
+- **Trusted origins.** `localhost` in v1. Once a domain is registered for the hosted tool, that domain is added. No other page can talk to the extension.
+- **Browsers.** Chrome only (Manifest V3; Edge also runs it). A Firefox port is mostly the same code if it's wanted later.
+- **Distribution.** v1: loaded unpacked in developer mode by the two initial users. Later: published on the Chrome Web Store (one-off developer fee, review). Google bars extensions that download YouTube videos. This one copies frames from a video that's already playing, in the same way as many screenshot extensions already on the store, but the listing should say so plainly.
+
+### 7.3 Burst capture and sharpness ranking
+
+Pressing **mark** captures a short burst around the current moment, not a single frame:
+
+1. Pause the video.
+2. Step through every frame within a configurable window around the marked moment (default −0.5 s to +0.5 s), seeking frame by frame and grabbing each one once it's rendered.
+3. Score each frame for sharpness (variance of the Laplacian, computed in the browser or back end).
+4. Show the burst as a filmstrip, sharpest frames highlighted; the sharpest is pre-selected.
+5. Return to the marked moment, paused or playing as before.
+
+At a 24 fps source, a 1 s window gives 24 frames, which is plenty to find a sharp one. A single-frame mode (grab exactly the current frame) is also available.
+
+### 7.4 Frame timestamps
+
+Each frame records its exact media time. This feeds the sync (§8), the YouTube link in the notes (§9.3) and chapter titles (§12).
+
+### 7.5 Alternatives considered
+
+| Approach | Why not chosen |
+| --- | --- |
+| Server-side download (yt-dlp) | Downloading breaches YouTube's terms and breaks whenever YouTube changes; unsuitable for a published research tool. |
+| Tab capture (`getDisplayMedia` + Region Capture) | Needs no install, but resolution is limited to the player's size on screen, player overlays can appear in frames, and frame times are approximate. Kept as a possible no-install fallback. |
+| Existing screenshot extensions (e.g. "Video Screenshot") | Save to the downloads folder or clipboard, with no way for another page to drive them, and no frame times or bursts. A clipboard workflow (grab with the extension, paste into the tool) could serve as a stopgap before the helper exists. |
+| The extension as the whole app (side panel on youtube.com) | Ruled out by the user: the tool should be a web page. |
+| User uploads the original MP4 | Ruled out: no video handling by the tool. |
+
+## 8. Video ↔ dive log sync
+
+### 8.1 Model
+
+Log time *t_log* (seconds since dive start) relates to video time *t_vid* by:
+
+> *t_log* = *a* · *t_vid* + *b*
+
+where *b* is the offset, and *a* is a drift factor, defaulting to 1.
+
+### 8.2 Setting sync
+
+- **Two-point (preferred):** the user clicks the video frame where the descent begins and the frame where they surface. These are matched to the log's descent and ascent anchors (§6.2). Two points give both *a* and *b*.
+- **One-point:** descent only; *a* = 1.
+- **Drag:** if the video starts or ends mid-dive, the user drags the depth profile along the timeline until features line up (e.g. a stop, a sharp descent), then fine-tunes it.
+
+Sync isn't accurate to better than the log's sample interval (≈10 s), which is acceptable for depth and temperature.
+
+### 8.3 Derived values
+
+For an observation at video time *t_vid*:
+
+- **Time:** dive start time + *t_log*.
+- **Depth and temperature:** linearly interpolated between the two nearest samples. Notes label them as interpolated.
+- **Time zone:** derived from the dive site's GPS position (offline time zone lookup), since Subsurface stores local time without a zone. With no GPS fix, the user's iNat account time zone is used. The user can override it either way.
+
+The tool shows a mismatch warning if the video's span after sync differs from the dive's duration by more than a set threshold.
+
+## 9. Observations
+
+### 9.1 Workflow (modal)
+
+1. Press **N** (new observation). The previous observation must be completed or discarded.
+2. Watch, and press **M** to mark. A burst is captured (§7.3) and shown as a filmstrip.
+3. Select 1–4 stills from one or more bursts. All marks within one observation are assumed to be **the same organism**. (v1.5: select a frame range for the GIF, which may overlap the stills or be separate.)
+4. Optionally click the organism on each selected still to record where it is in the frame (§9.8).
+5. Press **C** (complete). The annotation form appears; set values with clicks or keys, or leave them unset.
+6. Confirm. The observation uploads in the background and the user carries on watching.
+
+One frame may show several organisms. The same frame can be reused in several observations, and the notes should say which organism each observation is about (iNat's quality criteria expect evidence of a single subject).
+
+iNat convention is one observation per individual per place and time. If the same individual is seen again later in the dive, the user shouldn't make a second observation of it.
+
+### 9.2 Fields sent to iNaturalist
+
+| iNat field | Value |
+| --- | --- |
+| Taxon | **None.** Identification happens on iNat. |
+| Observed on | Dive start + synced log time, with time zone (§8.3) |
+| Latitude / longitude | Dive site GPS (entry point). If the log has no GPS fix, left empty for the user to set on iNat (§9.10) |
+| Positional accuracy | Setting, default 150 m |
+| Geoprivacy | Left to iNat (open by default; iNat obscures threatened taxa automatically) |
+| Captive/cultivated | Not set (wild by default) |
+| Description | Notes template (§9.3) |
+| Observation fields | Depth, water temperature (§9.4) |
+| Annotations | As set by the user; all unset by default (§9.5) |
+| Photos | Optional GIF first (v1.5), then 1–4 stills as JPEG, then detail crops (§9.9) |
+| Project | Optional; the target project already collects observations by geofence |
+| Licence | §9.6 |
+
+### 9.3 Notes template
+
+```txt
+Video: https://youtu.be/<id>?t=<seconds>
+Depth: 12.4 m (interpolated from dive computer log)
+Water temperature: 18 °C (dive computer)
+Dive site: <site name>
+Location: dive entry point (dive computer GPS), not the exact position of the organism
+Time into dive: 00:23:41
+Subject position: photo 1 – 80% across, 20% down (upper right); photo 2 – 48% across, 51% down (centre)
+Observed by: <diver>. Frames captured by: <capturer>, with the video owner's permission.
+<user free text>
+Created with <tool name> v<version>
+```
+
+The YouTube link with timestamp is the main motion evidence for identifiers, and stays useful even if iNat stops accepting animated GIFs.
+
+### 9.4 Observation fields
+
+iNat observation fields are created by users, and there are many near-duplicates for depth and water temperature, which differ in name, unit and data type. A search on one field won't find observations that used another, so the choice matters for analysis.
+
+- The scientist chooses the field IDs, preferring widely used number fields in metres and °C.
+- Field IDs are settings, not hard-coded.
+- Checked against iNat on 2026-11-16. **Depth** has a clear standard: field 558 "Depth (m)", numeric, ≈46,000 uses, which the tool uses by default. **Water temperature** has none: the candidates are 14913 "Water temperature (in °C)" (numeric, ≈1,300 uses) and 1661 "Water temperature (C)" (text, ≈850 uses). The temperature field is left empty until the scientist chooses.
+- Values are always repeated in the notes, in plain text.
+
+### 9.5 Annotations
+
+After **complete**, the form shows every annotation iNat supports, each one **unset** by default, plus the values iNat allows for it:
+
+- Alive or Dead
+- Life stage
+- Sex
+- Evidence of presence
+- Flowers and fruits (plants)
+- Leaves (plants)
+
+Nothing is assumed, not even Alive. iNat only offers some annotations for certain kinds of organism. Because taxon is unset at upload, the tool offers all of them and drops any that iNat rejects.
+
+From iNat's list of annotations (checked 2026-11-16): Alive or Dead and Life stage apply to animals only; Flowers and fruits to plants; Leaves to vascular plants; Sex and Evidence of presence to all life. iNat doesn't classify red and brown algae as plants, so for most marine algae only the last two apply. The form labels each annotation with the groups it applies to.
+
+### 9.6 Licence
+
+The frames come from the diver's video, so the diver owns their copyright, not the capturer. The licence is therefore the **video owner's choice**:
+
+- It's saved with the per-video permission (§15), not as a capturer setting.
+- Default: the most permissive licence iNat offers (CC0), for both observations and photos.
+- The capturer must confirm the owner agreed to that licence (§15).
+
+CC0, CC-BY and CC-BY-NC observations flow on to GBIF; other licences don't.
+
+### 9.7 Animated GIFs (v1.5)
+
+- Built from a contiguous range of burst frames.
+- 800 px wide, 8–12 fps, 2–4 s, kept under ≈5 MB (larger GIFs often fail to upload to iNat).
+- Uploaded as the **first** photo, so it becomes the observation's thumbnail.
+- Risk: iNat staff have said animated GIFs were never officially supported and may be removed. The YouTube link in the notes is the fallback. iNat accepts JPEG, PNG and GIF only; WebP and video are not accepted.
+
+### 9.8 Subject position in the frame
+
+Wide-angle frames often contain a small organism among a lot of reef. Context is useful, so frames are not cropped; instead the user can point out where the subject is.
+
+- With a still selected, the user clicks the organism. The tool stores the point as a percentage of the frame's width and height (*x*% across from the left, *y*% down from the top), so it is independent of resolution.
+- One point per photo, because the organism moves between frames. Optional; photos without a point are simply not mentioned.
+- The notes list each point with a plain-language region (a 3 × 3 grid: upper left … lower right) so identifiers can find the subject quickly (§9.3).
+- Especially useful when one frame is reused for several observations (§9.1): the point says which organism this observation is about.
+- Photos are uploaded unaltered. A later option could add an extra copy with a ring drawn around the subject, placed **last** so it never becomes the thumbnail.
+
+### 9.9 Detail crops
+
+iNat downsizes photos (believed to be at most 2048 px on the long edge; to verify), so a 4K frame loses about half its linear resolution and small subjects lose detail. Where a still has a subject position (§9.8), the tool adds a **detail crop** as an extra photo:
+
+- Cut from the full-resolution frame, centred on the subject point and moved inwards where it would run past the frame edge.
+- Default size 1600 × 1200 px of the source frame (no scaling), so iNat keeps it at full detail. Size is a setting.
+- On by default when a position is set; can be switched off per photo.
+- Photo order: GIF (v1.5), then the context stills, then the detail crops. The wide context shot stays the thumbnail.
+- Crops are new images generated from frames, not edits of them, and the notes say which photos are crops ("photos 3–4 are full-resolution crops of photos 1–2").
+
+### 9.10 Dives with no GPS fix
+
+If the log has no position (transmitter not paired, no surface fix), the tool doesn't try to supply one. It uses iNat's own location tools instead:
+
+- Observations upload with no location, and the user sets it afterwards in iNat's editor (map pin, search, or batch edit).
+- The setup screen warns at the start, before any capture, that this dive has no GPS fix.
+- After uploading, the tool lists the observations still missing a location, with links to edit them on iNat.
+- Until a location is set, the observations can't reach research grade and won't be picked up by geofence-based projects.
+
+## 10. Upload
+
+- Each observation uploads when completed ("upload as you go").
+- Request rate is throttled to ≈1 request per second (pyinaturalist's built-in limiter). One observation needs ≈2–6 requests.
+- On failure: retry up to 3 times with increasing waits, then stop, show the error, and keep the observation queued for a manual retry.
+- On success: save the iNat observation ID against the timeline marker, and link to it.
+
+## 11. Saved state, markers and duplicates
+
+Saved per YouTube video ID in browser storage:
+
+- Sync parameters and the loaded dive log (parsed).
+- Observations: marks, chosen frame times, annotations, status (draft, uploading, uploaded, failed), and iNat ID.
+- Reviewed ranges: sections of the video that have actually been played.
+
+Captured frame images go in IndexedDB, not `localStorage`, which is limited to ≈5 MB. Images are deleted after a successful upload unless the user downloads them (v1.5).
+
+Build note (v0.1.0): frame images are currently kept in memory only, so a draft observation, or a failed upload awaiting retry, is lost if the page is reloaded. Moving them to IndexedDB is still to do.
+
+On the timeline:
+
+- **Markers** show where observations were captured, coloured by status. Clicking one jumps to it and opens it on iNat.
+- **Shading** shows reviewed sections, so a long dive can be worked through over several sittings.
+
+This is the main guard against duplicate uploads. It only works within one browser; sharing state between capturers is out of scope for v1.
+
+## 12. YouTube chapter titles
+
+A few days after uploading, once identifications on iNat have settled, the tool can generate chapter titles for the video, turning it into an indexed record of what was seen.
+
+### 12.1 Process
+
+1. The user opens the video in the tool and chooses **Generate chapters**.
+2. The tool fetches the video's observations from iNat. Read-only, so no login is needed. It finds them by the iNat IDs saved in browser storage. If that state is missing (a different browser or person), it falls back to searching iNat for observations whose notes contain the video's link (`youtu.be/<id>`) and reading each one's timestamp from that link. Because the notes carry everything needed, chapters can always be rebuilt from iNat alone.
+3. For each observation it takes the first marked moment minus a lead-in (default **2 s**, configurable) and the current community identification.
+4. It shows the list for review, with each observation's quality grade, and produces a text block for the video description.
+
+### 12.2 Chapter rules
+
+YouTube only recognises chapters if: the first starts at `00:00`, there are at least three, and each lasts at least 10 seconds. The tool therefore:
+
+- adds a first chapter at `00:00` (default "Descent", editable);
+- merges observations closer than 10 s into one chapter ("Old wife / Blue groper");
+- warns if there are fewer than three chapters.
+
+### 12.3 Titles
+
+- Default format: common name (scientific name), e.g. `Weedy seadragon (Phyllopteryx taeniolatus)`. Falls back to the scientific name, or to the coarsest rank if not identified to species (e.g. `Nudibranchs (Nudibranchia)`).
+- Options: include only research-grade observations; include or omit unidentified ones ("Unidentified – see iNat").
+- Optionally, the description block ends with a link to the observations on iNat.
+
+### 12.4 Output
+
+```txt
+00:00 Descent
+03:12 Sponge garden – Red algae (Rhodophyta)
+07:45 Weedy seadragon (Phyllopteryx taeniolatus)
+...
+```
+
+- v1: copy-to-clipboard text that the video owner pastes into the YouTube description. If the capturer isn't the owner, they send it to the owner.
+- Later: write the description directly through the YouTube Data API. This needs the video owner's own Google login, because only the owner can edit a video.
+
+Known limitation: timestamps in notes and chapters assume the video never changes. If the owner trims or replaces it, they'll point to the wrong moment, and the tool doesn't try to detect this.
+
+## 13. Keyboard shortcuts
+
+The page re-implements YouTube's standard shortcuts (keys pressed inside the iframe go to YouTube, so focus is kept on the page), and adds its own. Playback commands go through the IFrame API; frame stepping goes through the extension, which can seek exactly.
+
+| Key                         | Action                                                      |
+|-----------------------------|-------------------------------------------------------------|
+| Space / K                   | Play / pause                                                |
+| J / L                       | Back / forward 10 s                                         |
+| ← / →                       | Back / forward 5 s                                          |
+| , / .                       | Back / forward one frame (when paused, exact via extension) |
+| < / >                       | Slower / faster playback                                    |
+| 0–9                         | Jump to 0–90 %                                              |
+| **N**                       | New observation                                             |
+| **M**                       | Mark (burst capture)                                        |
+| **Shift+M**                 | Single-frame capture                                        |
+| 1–4 (in filmstrip)          | Toggle selection of a highlighted frame                     |
+| Click (on a selected still) | Set subject position (§9.8)                                 |
+| **C**                       | Complete observation → annotation form                      |
+| Enter                       | Confirm and upload                                          |
+| Esc                         | Cancel the current step / discard draft (with confirmation) |
+| D / A                       | Set descent / ascent sync point at the current frame        |
+
+## 14. Interface layout
+
+```txt
+┌──────────────────────────────────────────────┬──────────────────────┐
+│                                              │  Observation #7       │
+│              YouTube player                  │  [filmstrip of burst] │
+│                                              │  ★ sharpest frames    │
+│                                              │  Selected: 3/4        │
+├──────────────────────────────────────────────┤  [Complete]           │
+│  timeline: ▮reviewed ▮  ● ● ●  (markers)     ├──────────────────────┤
+│  depth profile  ╲__/‾‾╲____/‾‾‾╲___╱         │  Dive: Site, date     │
+│  sync: descent ▲        ascent ▲              │  Depth 12.4 m 18 °C   │
+└──────────────────────────────────────────────┴──────────────────────┘
+```
+
+A setup screen before work begins covers: video URL, log file, sync, token check, extension check, and the permission checkbox.
+
+## 15. Permission and credit
+
+- Before the first upload for a video, the capturer chooses the licence the owner agreed to (default CC0) and must tick: *"I have explicit permission from the owner of this video to create iNaturalist observations from it, and to release its frames under the licence selected."* The confirmation and licence are saved per video ID.
+- If the capturer is the owner, the same step applies; it simply records their own choice.
+- Notes always credit the observer (diver) and the capturer separately (§9.3).
+- The observation is uploaded under the capturer's account, as iNat requires.
+
+## 16. Authentication
+
+- **v1:** the user pastes an iNat API token (from `inaturalist.org/users/api_token`). Tokens expire after 24 hours; the tool detects expiry and prompts for a new one.
+- **v2:** OAuth with PKCE, using an iNat application registered under the author's account (iNat requires an established account to register an app).
+
+## 17. Technology
+
+| Part             | Choice                                      |
+|------------------|---------------------------------------------|
+| Front end        | Svelte (SvelteKit or Vite)                  |
+| Frame grabber    | Browser extension, Manifest V3, plain JS/TS |
+| Back end         | Python, FastAPI                             |
+| iNat client      | pyinaturalist                               |
+| Log parsing      | Python XML parser for `.ssrf`               |
+| Time zone lookup | `timezonefinder` (offline)                  |
+| Sharpness        | Variance of the Laplacian (OpenCV or NumPy) |
+| GIF              | Pillow or gifski (v1.5)                     |
+| Licence          | MIT                                         |
+
+## 18. Open questions and things to verify
+
+1. **Frame grabber test in a real browser** (highest priority): confirm the content script can draw the `<video>` to a canvas at 2160p, and that frame-by-frame seeking for bursts is fast and exact enough. The page-to-extension handshake works. Automated browsers can't test the rest, because YouTube shows them a "confirm you're not a bot" screen, so this needs a person in their own signed-in Chrome.
+2. Which water temperature observation field the scientist wants (§9.4). Depth uses field 558.
+3. Whether the Perdix can be set to a faster sample rate than 10 s and whether Subsurface keeps it.
+4. On the first real upload, check that iNat accepts: annotations on observations with no taxon; the licence code sent as `CC0`; the time zone sent as an IANA name (`Australia/Sydney`). Photo licences currently follow the uploader's account default; check whether they can be set per photo through the API.
+5. Whether a "head-mounted camera" note is useful to the scientist.
+6. How YouTube plays a 24 fps source (whether it keeps 24 fps). The extension estimates the frame rate during playback.
+7. Why the sample video (`MRja6VhCmMs`) ends ≈2 minutes before the dive does (e.g. the camera stopping, or a missing final GoPro file chapter). Two-point sync isn't possible for it, so it's the test case for one-point sync plus dragging the profile (§8.2).
+
+## 18a. Decisions log
+
+Resolved questions, kept here so the reasoning isn't lost:
+
+| Question | Decision |
+| --- | --- |
+| How a capturer who isn't the diver gets the dive log | The diver sends them the `.ssrf` file. The tool doesn't handle this. |
+| EXIF metadata in uploaded photos | Not embedded. iNat strips EXIF from stored image files (it shows it on the photo page instead), so it wouldn't survive a later download. Embedded GPS would also be shown on the photo page even when iNat obscures the observation's location for a sensitive species. Date, time and location go through the API fields only. Downloaded frame bundles (v1.5) may carry EXIF, since they stay with the user. |
+| Videos trimmed or replaced after upload | Accepted as a known limitation. Links and chapters will point to the wrong moment, and the tool won't try to detect it. |
+| Origins the extension trusts | `localhost` for v1, plus a registered domain for the hosted tool. |
+| Browsers | Chrome (and Edge, which runs Chrome extensions) only for now. |
+| Paper | About the data, not the tool (§19). |
+| Duplicates across capturers | Deferred (§4, Later). |
+| No GPS fix | Upload without a location; set it on iNat (§9.10). |
+| Which GPS position | The transmitter GPS recorded by the dive computer (`Start location`), falling back to the Subsurface dive site position. |
+| Maximum photo size on iNat | 2048 px on the long edge (seen in photos' original dimensions), so 1600 × 1200 detail crops keep full detail. |
+| Finding a video's observations on iNat | Searching observation descriptions for the video ID works (`q=<id>&search_on=description`). |
+| Non-divers / no dive log | No-log mode in v2 (§4). |
+
+## 19. Data quality (for the paper)
+
+The paper will be about the data, so what matters is that observations are consistent and analysable, not measurements of the tool itself:
+
+- Every observation uses the same observation fields, units and notes format (§9.3, §9.4), so the scientist can query them reliably.
+- Derived values are labelled as derived, with the method stated (interpolation, entry-point location, 150 m accuracy), so they can be described in the paper's methods.
+- The tool is versioned, and its version is included in the notes, so the methods can cite exactly how observations were produced.

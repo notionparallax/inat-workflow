@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Grabber test</title>
+<style>body { font-family: system-ui; margin: 16px; } #player { width: 960px; height: 540px; }</style>
+</head>
+<body>
+<div id="player"></div>
+<pre id="log"></pre>
+<script>
+// Minimal page for testing the frame grabber extension against a real video.
+const params = new URLSearchParams(location.search);
+const VIDEO = params.get("v") || "MRja6VhCmMs";
+const log = (...a) => { document.getElementById("log").textContent += a.join(" ") + "\n"; console.log(...a); };
+window.__events = [];
+let grabberReady = false, seq = 0;
+const pending = new Map();
+window.addEventListener("message", (e) => {
+  const d = e.data;
+  if (!d || d.source !== "dive-inat-grabber") return;
+  if (d.type === "hello") { grabberReady = true; log("grabber hello", d.version); return; }
+  if (d.type === "key") { window.__events.push(d); return; }
+  const p = pending.get(d.id); if (!p) return;
+  pending.delete(d.id); d.ok ? p.resolve(d.result) : p.reject(new Error(d.error));
+});
+window.grab = (cmd, args) => new Promise((resolve, reject) => {
+  const id = ++seq; pending.set(id, { resolve, reject });
+  const iframe = document.querySelector("#player");
+  iframe.contentWindow.postMessage({ source: "dive-inat", id, cmd, args }, new URL(iframe.src).origin);
+  setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error("timeout " + cmd)); } }, 120000);
+});
+window.isGrabberReady = () => grabberReady;
+const tag = document.createElement("script"); tag.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(tag);
+window.onYouTubeIframeAPIReady = () => {
+  window.player = new YT.Player("player", {
+    videoId: VIDEO,
+    playerVars: { controls: 1, rel: 0, playsinline: 1, mute: 1, autoplay: 1, origin: location.origin },
+    events: {
+      onReady: (e) => { log("player ready"); window.playerReady = true; e.target.mute(); e.target.playVideo(); },
+      onStateChange: (e) => log("state", e.data),
+      onError: (e) => { log("player error", e.data); window.playerError = e.data; },
+    },
+  });
+};
+</script>
+</body>
+</html>

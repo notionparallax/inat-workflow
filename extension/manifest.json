@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Dive iNat frame grabber",
+  "version": "0.1.0",
+  "description": "Lets the Dive iNat tool read frames from the YouTube player embedded on its own page. Does nothing on any other site.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/embed/*", "https://www.youtube-nocookie.com/embed/*"],
+      "all_frames": true,
+      "js": ["grabber.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.youtube.com/embed/*", "https://www.youtube-nocookie.com/embed/*"],
+      "all_frames": true,
+      "js": ["main-world.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    }
+  ]
+}
