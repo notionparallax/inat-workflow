@@ -11,6 +11,7 @@
   import { createGrabber } from "./lib/grabber.js";
   import { loadYouTubeApi, PLAYER_ERRORS } from "./lib/youtube.js";
   import { addRange, clock, dragSync, interpolate, syncFrom, videoIdFrom, videoToLog } from "./lib/dive.js";
+  import { canCrop, cropFromBox, defaultCropBox } from "./lib/frames.js";
   import { loadLastVideo, loadSettings, loadVideoState, saveLastVideo, saveSettings, saveVideoState } from "./lib/store.svelte.js";
 
   const MAX_STILLS = 4;
@@ -216,7 +217,7 @@
     const ranked = [...frames].sort((a, b) => b.sharpness - a.sharpness);
     const entries = frames.map((f) => ({
       id: ++frameSeq, burst: burstNo, time: f.time, width: f.width, height: f.height, sharpness: f.sharpness,
-      blob: f.blob, url: URL.createObjectURL(f.blob), rank: ranked.indexOf(f) + 1, selected: false, position: null, crop: true,
+      blob: f.blob, url: URL.createObjectURL(f.blob), rank: ranked.indexOf(f) + 1, selected: false, position: null, cropBox: null,
     }));
     draft.frames.push(...entries);
     const selectedCount = draft.frames.filter((f) => f.selected).length;
@@ -285,7 +286,10 @@
       case " ": case "x": return current && toggleFrame(current);
       case "Enter": case "Escape": pickerOpen = false; return;
       case "c": pickerOpen = false; return complete();
-      case "m": return mark(false);
+      case "m": pickerOpen = false; return say("Play on, and press M again to add frames from later in the video.");
+      case "r":
+        if (current?.selected && canCrop(current)) current.cropBox = current.cropBox ? null : defaultCropBox(current);
+        return;
     }
     if (/^[1-9]$/.test(key)) {
       const latest = Math.max(...order.map((f) => f.burst));
@@ -319,7 +323,12 @@
     try {
       const stills = draft.frames.filter((f) => f.selected).sort((a, b) => a.time - b.time);
       const photos = stills.map((f, i) => ({ blob: f.blob, filename: `still-${i + 1}.jpg` }));
-      const crop_of = []; // detail crops come in v1.5 (SPEC §9.9)
+      const crop_of = [];
+      for (const [i, f] of stills.entries()) {
+        if (!f.cropBox) continue;
+        photos.push({ blob: await cropFromBox(f, f.cropBox), filename: `crop-${i + 1}.jpg` });
+        crop_of.push(i);
+      }
       const t_vid = stills[0].time;
       const annotations = Object.entries(draft.annotations)
         .filter(([, v]) => v)
@@ -333,7 +342,7 @@
       };
       const record = {
         id: crypto.randomUUID(), n: draft.n, t_vid, t_log: meta.t_log, status: "uploading",
-        frames: stills.map((f) => ({ time: f.time, position: f.position ? { ...f.position } : null })),
+        frames: stills.map((f) => ({ time: f.time, position: f.position ? { ...f.position } : null, cropBox: f.cropBox ? { ...f.cropBox } : null })),
         annotations, created: new Date().toISOString(),
       };
       video.observations.push(record);
@@ -412,12 +421,12 @@
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = e.target?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    const handled = [" ", "k", "j", "l", "x", "ArrowLeft", "ArrowRight", ",", ".", "<", ">", "n", "m", "c", "d", "a", "Escape", "Enter",
+    const handled = [" ", "k", "j", "l", "x", "r", "ArrowLeft", "ArrowRight", ",", ".", "<", ">", "n", "m", "c", "d", "a", "Escape", "Enter",
                      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
     const key = e.key.length === 1 && !["<", ">"].includes(e.key) ? e.key.toLowerCase() : e.key;
     if (!handled.includes(key)) return;
     if (key === "Enter" && stage !== "annotating" && !pickerOpen) return;
-    if (key === "x" && !pickerOpen) return;
+    if ((key === "x" || key === "r") && !pickerOpen) return;
     e.preventDefault();
     handleKey(e.key, e.shiftKey);
   }
@@ -444,16 +453,16 @@
         const burstNo = draft.nextBurst++;
         const frames = [];
         for (let i = 0; i < count; i++) {
-          const c = new OffscreenCanvas(1920, 1080);
+          const c = new OffscreenCanvas(3840, 2160);
           const ctx = c.getContext("2d");
           ctx.fillStyle = `hsl(${180 + i * 3}, 45%, 35%)`;
-          ctx.fillRect(0, 0, 1920, 1080);
-          ctx.filter = `blur(${Math.abs(i - count / 2) / 2}px)`;
+          ctx.fillRect(0, 0, 3840, 2160);
+          ctx.filter = `blur(${Math.abs(i - count / 2)}px)`;
           ctx.fillStyle = "#f5d76e";
-          ctx.beginPath(); ctx.ellipse(700 + i * 20, 540, 160, 70, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(1400 + i * 40, 1080, 320, 140, 0, 0, Math.PI * 2); ctx.fill();
           ctx.filter = "none";
-          ctx.fillStyle = "#fff"; ctx.font = "64px sans-serif"; ctx.fillText(`test frame ${i + 1}`, 60, 120);
-          frames.push({ time: currentTime + i / 24, width: 1920, height: 1080, sharpness: 100 - Math.abs(i - count / 2) * 4,
+          ctx.fillStyle = "#fff"; ctx.font = "128px sans-serif"; ctx.fillText(`test frame ${i + 1}`, 120, 240);
+          frames.push({ time: currentTime + i / 24, width: 3840, height: 2160, sharpness: 100 - Math.abs(i - count / 2) * 4,
                         blob: await c.convertToBlob({ type: "image/jpeg", quality: 0.8 }) });
         }
         addFrames(frames, burstNo);
@@ -552,6 +561,7 @@
         {#if live?.temp != null}<span>{Math.round(live.temp)} °C</span>{/if}
         {#if drift != null && Math.abs(drift) > 1}<span class="warn">clock drift {drift.toFixed(1)} %: check sync points</span>{/if}
       {/if}
+      {#if draft && !pickerOpen}<span class="open-obs">Observation {draft.n} open: <kbd>M</kbd> adds frames · <kbd>C</kbd> completes</span>{/if}
       <span class="spacer"></span>
       <button onclick={() => mark(false)} disabled={busy || !video}>Mark <kbd>M</kbd></button>
       <button onclick={() => setAnchor("descent")} disabled={!video?.dive}>Descent here <kbd>D</kbd></button>
@@ -606,8 +616,8 @@ Annotations: {JSON.stringify(o.preview.annotations)}</pre></details>
 {#if pickerOpen}
   <FramePicker {draft} highlightId={pickerHighlight} maxStills={MAX_STILLS} {busy}
                onHighlight={(id) => (pickerHighlight = id)} onToggle={toggleFrame}
-               onPosition={(f, p) => { f.position = p; }} onClose={() => (pickerOpen = false)}
-               onComplete={() => { pickerOpen = false; complete(); }} onMark={() => mark(false)} />
+               onPosition={(f, p) => { f.position = p; }} onCrop={(f, box) => { f.cropBox = box; }}
+               onClose={() => (pickerOpen = false)} onComplete={() => { pickerOpen = false; complete(); }} />
 {/if}
 
 {#if toast}<div class="toast {toast.kind}" role="status">{toast.message}</div>{/if}
@@ -631,6 +641,7 @@ Annotations: {JSON.stringify(o.preview.annotations)}</pre></details>
   .error-box { margin: 0; padding: 8px 10px; border: 1px solid var(--danger); color: var(--danger); border-radius: 6px; }
   .nowbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 13px; }
   .spacer { flex: 1; }
+  .open-obs { color: var(--accent); }
   .right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .right > :global(section) { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
   .notice { font-size: 13px; border-color: var(--warn) !important; }

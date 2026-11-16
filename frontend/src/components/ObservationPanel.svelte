@@ -32,8 +32,9 @@
             <button class="still" onclick={() => onOpenPicker(f.id)} aria-label="Open photo {i + 1} in the frame picker">
               <img src={f.url} alt="Selected still {i + 1}" />
               {#if f.position}<span class="pin" style="left:{f.position.x}%;top:{f.position.y}%"></span>{/if}
+              {#if f.cropBox}<span class="cropmark" style="left:{f.cropBox.x * 100}%;top:{f.cropBox.y * 100}%;width:{f.cropBox.s * 100}%;height:{f.cropBox.s * 100}%"></span>{/if}
             </button>
-            <figcaption>Photo {i + 1} · {clock(f.time)}{f.position ? ` · subject ${region(f.position.x, f.position.y)}` : ""}</figcaption>
+            <figcaption>Photo {i + 1} · {clock(f.time)}{f.position ? ` · subject ${region(f.position.x, f.position.y)}` : ""}{f.cropBox ? " · + crop" : ""}</figcaption>
           </figure>
         {/each}
       </div>
@@ -83,6 +84,7 @@
   figure { margin: 0; }
   .still { position: relative; display: block; width: 100%; padding: 0; border: 1px solid var(--border); background: none; line-height: 0; }
   .still img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+  .cropmark { position: absolute; border: 1px dashed #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.4); pointer-events: none; }
   .pin { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 2px var(--accent); pointer-events: none; }
   figcaption { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; }

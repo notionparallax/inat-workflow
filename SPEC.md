@@ -41,6 +41,7 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 - Upload of stills with time, location, depth, temperature, notes template, observation fields and annotations.
 - A timestamped YouTube link in every observation's notes.
 - Subject position (*x*% / *y*%) on each still, written into the notes.
+- Optional crop box on each still, uploaded as an extra photo (§9.9).
 - YouTube chapter titles generated from settled identifications, as copy-paste text.
 - Timeline markers for captured observations and shading for reviewed sections, saved in browser storage.
 - Keyboard-first controls.
@@ -48,7 +49,6 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 ### Version 1.5
 
 - Animated GIF built from a range of frames, uploaded as the first photo.
-- Detail crops: full-resolution crops around the subject position (§9.9).
 - Downloading an observation's captured frames as a bundle, so they can be reused later.
 
 ### Version 2
@@ -140,7 +140,6 @@ A dive with no GPS fix is still accepted (§9.10).
 - Observation field IDs for depth and water temperature (see §9.4).
 - Optional iNat project ID to add observations to.
 - Notes free text (e.g. a citation or project statement).
-- Detail crop size (§9.9).
 
 The licence is not a capturer setting; it's chosen per video with the owner's permission (§9.6, §15).
 
@@ -251,7 +250,7 @@ iNat convention is one observation per individual per place and time. If the sam
 | Description | Notes template (§9.3) |
 | Observation fields | Depth, water temperature (§9.4) |
 | Annotations | As set by the user; all unset by default (§9.5) |
-| Photos | Optional GIF first (v1.5), then 1–4 stills as JPEG, then detail crops (v1.5, §9.9) |
+| Photos | Optional GIF first (v1.5), then 1–4 stills as JPEG, then any crops (§9.9) |
 | Project | Optional; the target project already collects observations by geofence |
 | Licence | §9.6 |
 
@@ -323,15 +322,16 @@ Wide-angle frames often contain a small organism among a lot of reef. Context is
 - Especially useful when one frame is reused for several observations (§9.1): the point says which organism this observation is about.
 - Photos are uploaded unaltered. A later option could add an extra copy with a ring drawn around the subject, placed **last** so it never becomes the thumbnail.
 
-### 9.9 Detail crops (v1.5)
+### 9.9 Crops
 
-iNat downsizes photos (believed to be at most 2048 px on the long edge; to verify), so a 4K frame loses about half its linear resolution and small subjects lose detail. Where a still has a subject position (§9.8), the tool adds a **detail crop** as an extra photo:
+iNat stores photos at most 2048 px on the long edge, so a 4K frame loses about half its linear resolution and small subjects lose detail. In the frame picker, the user can add a **crop box** to any selected still, and the crop is uploaded as an extra photo:
 
-- Cut from the full-resolution frame, centred on the subject point and moved inwards where it would run past the frame edge.
-- Default size 1600 × 1200 px of the source frame (no scaling), so iNat keeps it at full detail. Size is a setting.
-- On by default when a position is set; can be switched off per photo.
-- Photo order: GIF (v1.5), then the context stills, then the detail crops. The wide context shot stays the thumbnail.
-- Crops are new images generated from frames, not edits of them, and the notes say which photos are crops ("photos 3–4 are full-resolution crops of photos 1–2").
+- Added with the "Add crop" button or `R`; starts at the smallest allowed size, centred on the subject position if one is marked.
+- Dragged to move, and resized from its corner. It keeps the frame's aspect ratio and **can't be smaller than 2048 px on the long edge**, so iNat never has to scale it up and the crop uses every pixel iNat will keep.
+- Offered only for frames larger than 2048 px (a 1080p frame already fits).
+- One crop per still, optional.
+- Photo order: GIF (v1.5), then the full stills, then the crops. The full frame stays the thumbnail.
+- Crops are new images cut from the full-resolution frame, and the notes say which photos are crops ("Photo 4 is a full-resolution crop of photo 2").
 
 ### 9.10 Dives with no GPS fix
 
@@ -499,7 +499,7 @@ Resolved questions, kept here so the reasoning isn't lost:
 | Duplicates across capturers | Deferred (§4, Later). |
 | No GPS fix | Upload without a location; set it on iNat (§9.10). |
 | Which GPS position | The transmitter GPS recorded by the dive computer (`Start location`), falling back to the Subsurface dive site position. |
-| Maximum photo size on iNat | 2048 px on the long edge (seen in photos' original dimensions), so 1600 × 1200 detail crops keep full detail. |
+| Maximum photo size on iNat | 2048 px on the long edge (seen in photos' original dimensions), so crops are never smaller than that (§9.9). |
 | Finding a video's observations on iNat | Searching observation descriptions for the video ID works (`q=<id>&search_on=description`). |
 | Non-divers / no dive log | No-log mode in v2 (§4). |
 

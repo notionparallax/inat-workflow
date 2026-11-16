@@ -37,12 +37,29 @@ await page.evaluate(() => window.__diveInat.fakeBurst(24));
 await page.waitForSelector("[role=dialog]");
 await page.keyboard.press("ArrowRight");
 await page.keyboard.press("2");
-const img = await page.locator(".imgbtn img").boundingBox();
+const img = await page.locator(".imgbox img").boundingBox();
 await page.mouse.click(img.x + img.width * 0.4, img.y + img.height * 0.5);
+// Add a crop box and enlarge it from its corner.
+await page.keyboard.press("r");
+const handle = await page.locator(".crop .handle").boundingBox();
+await page.mouse.move(handle.x + 8, handle.y + 8);
+await page.mouse.down();
+await page.mouse.move(handle.x + 120, handle.y + 60, { steps: 5 });
+await page.mouse.up();
+const cropLabel = await page.locator(".crop-label").innerText();
+// Select a second frame with the + on a thumbnail.
+await page.locator(".thumb:not(.selected) .sel").first().click();
 await page.screenshot({ path: path.join(out, "ui-picker.png") });
 const selected = await page.locator(".thumb.selected").count();
-await page.keyboard.press("Escape");
-await page.screenshot({ path: path.join(out, "ui-after-picker.png") });
 
-console.log(JSON.stringify({ drawerOpen, sync, selected, errors }, null, 2));
+// Complete, then upload (dry run) and read back what would be sent.
+await page.keyboard.press("c");
+await page.keyboard.press("Enter");
+await page.waitForSelector(".row.dry-run", { timeout: 20000 });
+await page.locator(".row.dry-run summary").first().click();
+await page.screenshot({ path: path.join(out, "ui-after-upload.png"), fullPage: true });
+const preview = await page.locator(".row.dry-run pre").first().innerText();
+
+console.log(JSON.stringify({ drawerOpen, sync, cropLabel, selected, errors }, null, 2));
+console.log(preview);
 await browser.close();
