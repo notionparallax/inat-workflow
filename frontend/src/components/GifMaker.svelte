@@ -20,10 +20,11 @@
 
   async function make() {
     try {
-      busy = `Capturing ${frameCount} frames…`;
-      const blobs = await capture({ center: frame.time, before, after, fps });
+      busy = "Capturing frames…";
+      const prepared = await capture({ center: frame.time, before, after, fps, width, box: useCrop ? frame.cropBox : null },
+                                     (n) => (busy = `Capturing frames… ${n} of ≈${frameCount}`));
       busy = "Encoding GIF…";
-      const gif = await encodeGif(blobs, { width, fps, box: useCrop ? frame.cropBox : null });
+      const gif = await encodeGif(prepared, { fps });
       if (result) URL.revokeObjectURL(result.url);
       result = { ...gif, url: URL.createObjectURL(gif.blob), start: frame.time - before, end: frame.time + after, cropped: useCrop };
     } catch (e) {
@@ -48,8 +49,8 @@
   </header>
 
   <div class="opts">
-    <label>Seconds before <input type="number" min="0" max="5" step="0.5" bind:value={before} /></label>
-    <label>Seconds after <input type="number" min="0" max="5" step="0.5" bind:value={after} /></label>
+    <label>Seconds before <input type="number" min="0" max="5" step="0.1" bind:value={before} /></label>
+    <label>Seconds after <input type="number" min="0" max="5" step="0.1" bind:value={after} /></label>
     <label>Frames per second
       <select bind:value={fps}>{#each [6, 8, 10, 12, 15] as f}<option value={f}>{f}</option>{/each}</select>
     </label>

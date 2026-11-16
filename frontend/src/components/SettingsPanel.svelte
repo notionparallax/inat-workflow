@@ -18,6 +18,11 @@
   <label class="wide">Text added to every observation's notes<textarea rows="2" value={settings.free_text} oninput={(e) => set("free_text", e.currentTarget.value)}></textarea></label>
   <label>Burst: seconds before mark<input type="number" step="0.1" min="0" value={settings.burst_before} oninput={(e) => set("burst_before", num(e.currentTarget.value))} /></label>
   <label>Burst: seconds after mark<input type="number" step="0.1" min="0" value={settings.burst_after} oninput={(e) => set("burst_after", num(e.currentTarget.value))} /></label>
+  <label>Capture speed
+    <select value={settings.capture_rate ?? 1} onchange={(e) => set("capture_rate", Number(e.currentTarget.value))}>
+      <option value={1}>Full speed (fastest)</option><option value={0.5}>Half speed</option><option value={0.25}>Quarter speed</option>
+    </select>
+    <small>Frames are captured while the video plays. If bursts have gaps, a slower speed catches every frame.</small></label>
   <label class="check wide"><input type="checkbox" checked={settings.dry_run} onchange={(e) => set("dry_run", e.currentTarget.checked)} />
     Dry run: show what would be sent to iNaturalist without uploading</label>
 </section>

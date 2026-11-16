@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = {
   crop_h: 1200,
   burst_before: 0.5,
   burst_after: 0.5,
+  capture_rate: 1, // playback speed while capturing; slower catches every frame on slow machines
   dry_run: true,
   lead_in: 2,
 };

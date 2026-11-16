@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.1.0";
+  const VERSION = "0.2.0";
   // Pages allowed to use the grabber. Add the hosted domain here once registered.
   const ALLOWED_PARENTS = [/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
   const FROM_PAGE = "dive-inat";
@@ -137,7 +137,84 @@
       return { time: await seekExact(v, v.currentTime + frames / rate + 0.001) };
     },
 
-    // Step through every frame from center-before to center+after.
+    // Play through center-before … center+after and capture frames as they're
+    // presented. Much faster than seeking frame by frame. Frames are streamed
+    // to the page as they're ready.
+    //   mode "jpeg": full-resolution JPEG + sharpness (stills)
+    //   mode "rgba": raw pixels of `box` (fractions) scaled to `width` (GIFs),
+    //                taking frames at `fps`
+    record: async ({ center, before = 0.5, after = 0.5, rate = 1, mode = "jpeg", quality, width, box, fps, maxFrames = 240 }, progress) => {
+      const v = video();
+      if (!v) throw new Error("No video found in the player.");
+      const start = Math.max(0, center - before), end = center + after;
+      const was = { playing: !v.paused, rate: v.playbackRate, muted: v.muted };
+      v.pause();
+      await seekExact(v, Math.max(0, start - 0.05));
+      v.muted = true;
+      v.playbackRate = rate;
+
+      const W = v.videoWidth, H = v.videoHeight;
+      const crop = box ? { sx: box.x * W, sy: box.y * H, sw: box.s * W, sh: box.s * H } : { sx: 0, sy: 0, sw: W, sh: H };
+      const outW = mode === "rgba" ? Math.min(width || 800, Math.round(crop.sw)) : W;
+      const outH = mode === "rgba" ? Math.round((crop.sh * outW) / crop.sw) : H;
+      const step = mode === "rgba" && fps ? 1 / fps : 0;
+      let nextTime = start;
+      let count = 0;
+      const pending = [];
+
+      // Turn a snapshot into a frame message; runs while recording continues.
+      const finish = async (bitmapPromise, time) => {
+        const bmp = await bitmapPromise;
+        if (mode === "rgba") {
+          const c = new OffscreenCanvas(outW, outH);
+          const ctx = c.getContext("2d", { willReadFrequently: true });
+          ctx.drawImage(bmp, 0, 0, outW, outH);
+          bmp.close();
+          const data = ctx.getImageData(0, 0, outW, outH).data;
+          progress({ time, width: outW, height: outH, data: data.buffer }, [data.buffer]);
+        } else {
+          const c = new OffscreenCanvas(W, H);
+          c.getContext("2d").drawImage(bmp, 0, 0);
+          bmp.close();
+          const score = sharpness(c, W, H);
+          const blob = await c.convertToBlob({ type: "image/jpeg", quality: quality || 0.92 });
+          progress({ time, width: W, height: H, sharpness: score, blob });
+        }
+      };
+
+      await new Promise((resolve) => {
+        let stopped = false;
+        const stop = () => { if (!stopped) { stopped = true; v.pause(); resolve(); } };
+        const halfFrame = 0.5 / (roundFps() || 30);
+        const onFrame = (_now, meta) => {
+          if (stopped) return;
+          const t = meta.mediaTime;
+          if (t >= start - 1e-3 && t <= end + 1e-3 && count < maxFrames && (!step || t >= nextTime - halfFrame)) {
+            // Snapshot now (createImageBitmap copies the current frame); process later.
+            const snap = mode === "rgba"
+              ? createImageBitmap(v, crop.sx, crop.sy, crop.sw, crop.sh, { resizeWidth: outW, resizeHeight: outH, resizeQuality: "high" })
+              : createImageBitmap(v);
+            pending.push(finish(snap, t));
+            count++;
+            if (step) while (nextTime <= t + halfFrame) nextTime += step;
+          }
+          if (t >= end || count >= maxFrames) return stop();
+          v.requestVideoFrameCallback(onFrame);
+        };
+        v.requestVideoFrameCallback(onFrame);
+        v.play();
+        setTimeout(stop, ((end - start) / rate) * 1000 + 20000); // stalled buffering
+      });
+      await Promise.all(pending);
+
+      v.playbackRate = was.rate;
+      v.muted = was.muted;
+      await seekExact(v, center);
+      if (was.playing) v.play();
+      return { count, start, end };
+    },
+
+    // Step through every frame from center-before to center+after (older, slower method).
     burst: async ({ center, before = 0.5, after = 0.5, fps, quality, maxFrames = 90 }) => {
       const v = video();
       if (!v) throw new Error("No video found in the player.");
@@ -179,7 +256,8 @@
     const msg = event.data;
     if (!msg || msg.source !== FROM_PAGE || !commands[msg.cmd]) return;
     try {
-      const result = await commands[msg.cmd](msg.args || {});
+      const progress = (frame, transfer) => send({ id: msg.id, type: "frame", frame }, transfer);
+      const result = await commands[msg.cmd](msg.args || {}, progress);
       send({ id: msg.id, ok: true, result });
     } catch (err) {
       send({ id: msg.id, ok: false, error: String((err && err.message) || err) });

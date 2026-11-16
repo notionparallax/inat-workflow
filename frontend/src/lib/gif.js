@@ -61,10 +61,10 @@ function encodeOnce(frames, width, height, fps, colors) {
   return gif.bytes();
 }
 
-/** Encode, reducing colours and then size until the GIF fits `maxBytes`. */
-export async function encodeGif(blobs, { width = GIF_DEFAULTS.width, fps = GIF_DEFAULTS.fps, box = null,
-                                        maxBytes = GIF_DEFAULTS.maxBytes } = {}) {
-  let prepared = await prepareFrames(blobs, width, box);
+/** Encode prepared frames ({frames: RGBA arrays, width, height}), reducing
+ *  colours and then size until the GIF fits `maxBytes`. */
+export async function encodeGif(prepared, { fps = GIF_DEFAULTS.fps, maxBytes = GIF_DEFAULTS.maxBytes } = {}) {
+  if (!prepared.frames.length) throw new Error("No frames were captured for the GIF.");
   let colors = 256;
   for (let attempt = 0; attempt < 8; attempt++) {
     const bytes = encodeOnce(prepared.frames, prepared.width, prepared.height, fps, colors);

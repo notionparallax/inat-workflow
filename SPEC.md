@@ -167,15 +167,16 @@ The web page remains the app. A small companion browser extension (the "frame gr
 
 ### 7.3 Burst capture and sharpness ranking
 
-Pressing **mark** captures a short burst around the current moment, not a single frame:
+Pressing **mark** captures a short burst around the current moment, not a single frame. Since extension v0.2.0 the burst is **recorded while the video plays**, which is much faster than seeking to each frame:
 
-1. Pause the video.
-2. Step through every frame within a configurable window around the marked moment (default −0.5 s to +0.5 s), seeking frame by frame and grabbing each one once it's rendered.
-3. Score each frame for sharpness (variance of the Laplacian, computed in the browser or back end).
-4. Open the burst in a full-screen frame picker (§9.1), sharpest frames numbered; the sharpest is pre-selected.
-5. Return to the marked moment, paused or playing as before.
+1. Seek once to just before the window (default −0.5 s to +0.5 s around the mark), mute, and play.
+2. On every presented frame inside the window (`requestVideoFrameCallback`), snapshot it immediately (`createImageBitmap`), then carry on playing.
+3. Each snapshot is scored for sharpness (variance of the Laplacian) and encoded as a full-resolution JPEG in the background, and **sent to the page as soon as it's ready**. The frame picker opens on the first frame and fills in as the rest arrive; ranks update as they come.
+4. When the window ends, pause, return to the marked moment, and pre-select the sharpest frame.
 
-At a 24 fps source, a 1 s window gives 24 frames, which is plenty to find a sharp one. A single-frame mode (grab exactly the current frame) is also available.
+At a 24 fps source, a 1 s window gives ≈24 frames in about a second of playback, plus encoding. A "capture speed" setting (full, half or quarter speed) trades time for catching every frame on slower machines. A single-frame mode (grab exactly the current frame) is also available, and the older seek-per-frame method remains as a fallback for older extension versions.
+
+**GIF frames** use the same recording, but each snapshot is cropped (to the crop box, if chosen) and scaled to the GIF width as it's taken, kept only at the GIF frame rate, and sent as raw pixels, with no JPEG step. A 3 s GIF takes about 3 s to capture.
 
 ### 7.4 Frame timestamps
 

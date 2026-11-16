@@ -12,6 +12,7 @@
   import { loadYouTubeApi, PLAYER_ERRORS } from "./lib/youtube.js";
   import { addRange, clock, dragSync, interpolate, syncFrom, videoIdFrom, videoToLog } from "./lib/dive.js";
   import { canCrop, cropFromBox, defaultCropBox } from "./lib/frames.js";
+  import { prepareFrames } from "./lib/gif.js";
   import { loadLastVideo, loadSettings, loadVideoState, saveLastVideo, saveSettings, saveVideoState } from "./lib/store.svelte.js";
 
   const MAX_STILLS = 4;
@@ -231,19 +232,30 @@
     stage = "capturing";
   }
 
-  function addFrames(frames, burstNo) {
-    const ranked = [...frames].sort((a, b) => b.sharpness - a.sharpness);
-    const entries = frames.map((f) => ({
+  // Frames arrive one at a time while a burst is recorded; ranks are kept up to date.
+  function addFrame(f, burstNo) {
+    draft.frames.push({
       id: ++frameSeq, burst: burstNo, time: f.time, width: f.width, height: f.height, sharpness: f.sharpness,
-      blob: f.blob, url: URL.createObjectURL(f.blob), rank: ranked.indexOf(f) + 1, selected: false, position: null, cropBox: null,
-    }));
-    draft.frames.push(...entries);
-    const selectedCount = draft.frames.filter((f) => f.selected).length;
-    if (selectedCount < MAX_STILLS && entries.length) {
-      const best = draft.frames.find((f) => f.burst === burstNo && f.rank === 1);
-      best.selected = true;
-    }
+      blob: f.blob, url: URL.createObjectURL(f.blob), rank: 0, selected: false, position: null, cropBox: null,
+    });
+    const inBurst = draft.frames.filter((x) => x.burst === burstNo).sort((a, b) => b.sharpness - a.sharpness);
+    inBurst.forEach((x, i) => (x.rank = i + 1));
   }
+  // When a burst is complete, pre-select its sharpest frame if there's room.
+  function finishBurst(burstNo) {
+    const selectedCount = draft.frames.filter((f) => f.selected).length;
+    const best = draft.frames.find((f) => f.burst === burstNo && f.rank === 1);
+    if (best && selectedCount < MAX_STILLS) best.selected = true;
+    return best;
+  }
+  function addFrames(frames, burstNo) {
+    frames.forEach((f) => addFrame(f, burstNo));
+    finishBurst(burstNo);
+  }
+  const supportsRecord = () => {
+    const [major, minor] = (extension.version || "0.0").split(".").map(Number);
+    return major > 0 || minor >= 2;
+  };
 
   async function mark(single = false) {
     if (!video) return say("Load a video first.", "error");
@@ -259,11 +271,25 @@
         addFrames([f], burstNo);
       } else {
         const center = player.getCurrentTime();
-        const r = await grabber.burst({ center, before: settings.burst_before, after: settings.burst_after, fps: extension.fps || undefined });
-        if (!r.frames.length) throw new Error("No frames came back from the player.");
-        addFrames(r.frames, burstNo);
+        const args = { center, before: settings.burst_before, after: settings.burst_after };
+        if (supportsRecord()) {
+          // Frames stream in; the picker opens on the first and fills as they arrive.
+          let first = true;
+          await grabber.record({ ...args, mode: "jpeg", rate: settings.capture_rate || 1 }, (f) => {
+            addFrame(f, burstNo);
+            if (first) { first = false; openPicker(draft.frames[draft.frames.length - 1].id); }
+          });
+          if (first) throw new Error("No frames came back from the player.");
+          const best = finishBurst(burstNo);
+          if (best && pickerOpen) pickerHighlight = best.id;
+        } else {
+          const r = await grabber.burst({ ...args, fps: extension.fps || undefined });
+          if (!r.frames.length) throw new Error("No frames came back from the player.");
+          addFrames(r.frames, burstNo);
+          openPicker(draft.frames.find((f) => f.burst === burstNo && f.rank === 1)?.id);
+        }
       }
-      openPicker(draft.frames.find((f) => f.burst === burstNo && f.rank === 1)?.id);
+      if (single) openPicker(draft.frames.find((f) => f.burst === burstNo)?.id);
     } catch (e) {
       say(e.message, "error");
     } finally {
@@ -272,13 +298,28 @@
   }
 
   // Frames for a GIF: the extension steps through the range at GIF frame rate.
-  async function captureGif({ center, before, after, fps }) {
-    if (extension.found) {
-      const r = await grabber.burst({ center, before, after, fps, quality: 0.85, maxFrames: 160 });
-      return r.frames.map((f) => f.blob);
+  // Returns {frames: RGBA arrays, width, height}, ready for the GIF encoder.
+  async function captureGif({ center, before, after, fps, width, box }, onCount = () => {}) {
+    if (extension.found && supportsRecord()) {
+      const got = [];
+      await grabber.record({ center, before, after, fps, width, box, mode: "rgba", rate: settings.capture_rate || 1 }, (f) => {
+        got.push(f);
+        onCount(got.length);
+      });
+      got.sort((a, b) => a.time - b.time);
+      if (!got.length) return { frames: [], width, height: 0 };
+      return { frames: got.map((f) => new Uint8ClampedArray(f.data)), width: got[0].width, height: got[0].height };
     }
-    if (import.meta.env.DEV) return (await synthFrames(Math.round((before + after) * fps) + 1, center - before, fps)).map((f) => f.blob);
-    throw new Error("Making a GIF needs the frame grabber extension.");
+    let blobs;
+    if (extension.found) {
+      blobs = (await grabber.burst({ center, before, after, fps, quality: 0.85, maxFrames: 160 })).frames.map((f) => f.blob);
+    } else if (import.meta.env.DEV) {
+      blobs = (await synthFrames(Math.round((before + after) * fps) + 1, center - before, fps)).map((f) => f.blob);
+    } else {
+      throw new Error("Making a GIF needs the frame grabber extension.");
+    }
+    onCount(blobs.length);
+    return prepareFrames(blobs, width, box);
   }
   function useGif(gif) {
     if (draft.gif) URL.revokeObjectURL(draft.gif.url);

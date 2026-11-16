@@ -17,23 +17,33 @@ export function createGrabber({ getIframe, onHello, onKey }) {
     if (d.type === "key") return onKey?.(d);
     const p = pending.get(d.id);
     if (!p) return;
+    if (d.type === "frame") {
+      p.onFrame?.(d.frame);
+      p.resetTimer();
+      return;
+    }
     pending.delete(d.id);
     clearTimeout(p.timer);
     d.ok ? p.resolve(d.result) : p.reject(new Error(d.error));
   }
   window.addEventListener("message", onMessage);
 
-  function call(cmd, args = {}, timeoutMs = 60000) {
+  function call(cmd, args = {}, timeoutMs = 60000, onFrame = null) {
     const iframe = getIframe();
     if (!iframe?.contentWindow) return Promise.reject(new Error("Player not ready"));
     const origin = new URL(iframe.src).origin;
     return new Promise((resolve, reject) => {
       const id = ++seq;
-      const timer = setTimeout(() => {
-        pending.delete(id);
-        reject(new Error(`The frame grabber didn't answer (${cmd}). Is the extension installed?`));
-      }, timeoutMs);
-      pending.set(id, { resolve, reject, timer });
+      const entry = { resolve, reject, onFrame, timer: null };
+      entry.resetTimer = () => {
+        clearTimeout(entry.timer);
+        entry.timer = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error(`The frame grabber didn't answer (${cmd}). Is the extension installed?`));
+        }, timeoutMs);
+      };
+      entry.resetTimer();
+      pending.set(id, entry);
       iframe.contentWindow.postMessage({ source: TO_GRABBER, id, cmd, args }, origin);
     });
   }
@@ -44,6 +54,7 @@ export function createGrabber({ getIframe, onHello, onKey }) {
     status: () => call("status", {}, 3000),
     grab: () => call("grab"),
     burst: (args) => call("burst", args, 120000),
+    record: (args, onFrame) => call("record", args, 30000, onFrame),
     step: (frames, fps) => call("step", { frames, fps }),
     seek: (time) => call("seek", { time }),
     quality: (level = "hd2160") => call("quality", { level }, 3000),
