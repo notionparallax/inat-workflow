@@ -12,7 +12,7 @@
   <label>Depth observation field ID<input type="number" value={settings.depth_field_id ?? ""} oninput={(e) => set("depth_field_id", num(e.currentTarget.value))} />
     <small>558 = “Depth (m)”, numeric, the most used depth field (≈46,000 uses)</small></label>
   <label>Water temperature observation field ID<input type="number" value={settings.temp_field_id ?? ""} oninput={(e) => set("temp_field_id", num(e.currentTarget.value))} />
-    <small>No clear standard. Candidates: 14913 “Water temperature (in °C)” numeric; 1661 “Water temperature (C)” text. Ask the scientist.</small></label>
+    <small>14913 = “Water temperature (in °C)”, numeric</small></label>
   <label>iNat project ID (optional)<input type="number" value={settings.project_id ?? ""} oninput={(e) => set("project_id", num(e.currentTarget.value))} />
     <small>Leave empty if the project collects observations by area automatically.</small></label>
   <label class="wide">Text added to every observation's notes<textarea rows="2" value={settings.free_text} oninput={(e) => set("free_text", e.currentTarget.value)}></textarea></label>

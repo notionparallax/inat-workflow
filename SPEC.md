@@ -278,7 +278,7 @@ iNat observation fields are created by users, and there are many near-duplicates
 
 - The scientist chooses the field IDs, preferring widely used number fields in metres and °C.
 - Field IDs are settings, not hard-coded.
-- Checked against iNat on 2026-11-16. **Depth** has a clear standard: field 558 "Depth (m)", numeric, ≈46,000 uses, which the tool uses by default. **Water temperature** has none: the candidates are 14913 "Water temperature (in °C)" (numeric, ≈1,300 uses) and 1661 "Water temperature (C)" (text, ≈850 uses). The temperature field is left empty until the scientist chooses.
+- Checked against iNat on 2026-11-16. **Depth** has a clear standard: field 558 "Depth (m)", numeric, ≈46,000 uses, which the tool uses by default. **Water temperature** has none: the candidates are 14913 "Water temperature (in °C)" (numeric, ≈1,300 uses) and 1661 "Water temperature (C)" (text, ≈850 uses). Chosen 2026-11-16: field 14913 "Water temperature (in °C)", numeric, used by default.
 - Values are always repeated in the notes, in plain text.
 
 ### 9.5 Annotations
@@ -481,7 +481,7 @@ Build note (v0.1.x): during development, `frontend/src/lib/devDefaults.js` fills
 ## 18. Open questions and things to verify
 
 1. **Frame grabber test in a real browser** (highest priority): confirm the content script can draw the `<video>` to a canvas at 2160p, and that frame-by-frame seeking for bursts is fast and exact enough. The page-to-extension handshake works. Automated browsers can't test the rest, because YouTube shows them a "confirm you're not a bot" screen, so this needs a person in their own signed-in Chrome.
-2. Which water temperature observation field the scientist wants (§9.4). Depth uses field 558.
+2. (Resolved: water temperature uses field 14913, depth uses 558; see §9.4.)
 3. Whether the Perdix can be set to a faster sample rate than 10 s and whether Subsurface keeps it.
 4. Storing captured frames in IndexedDB so a reload doesn't lose a draft or a failed upload (§11). Deferred for now.
 5. Whether a "head-mounted camera" note is useful to the scientist.
@@ -499,6 +499,7 @@ Resolved questions, kept here so the reasoning isn't lost:
 | Videos trimmed or replaced after upload | Accepted as a known limitation. Links and chapters will point to the wrong moment, and the tool won't try to detect it. |
 | Origins the extension trusts | `localhost` for v1, plus a registered domain for the hosted tool. |
 | Browsers | Chrome (and Edge, which runs Chrome extensions) only for now. |
+| Observation fields | Depth: 558 "Depth (m)". Water temperature: 14913 "Water temperature (in °C)". Both numeric (§9.4). |
 | Paper | About the data, not the tool (§19). |
 | Licences | Follow the uploader's iNat account defaults, since photos take the account default anyway; CC-BY-NC is fine for research and GBIF (§9.6). Replaces the earlier per-video licence choice. |
 | Duplicates across capturers | Deferred (§4, Later). |

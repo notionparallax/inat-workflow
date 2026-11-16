@@ -9,7 +9,7 @@ export const DEFAULT_SETTINGS = {
   capturer: "",
   accuracy_m: 150,
   depth_field_id: 558, // "Depth (m)", numeric, the most used depth field on iNat
-  temp_field_id: null, // for the scientist to choose (SPEC §9.4)
+  temp_field_id: 14913, // "Water temperature (in °C)", numeric (SPEC §9.4)
   project_id: null,
   free_text: "",
   crop_w: 1600,
@@ -36,8 +36,13 @@ function write(key, value) {
   } catch { /* storage full or blocked: work continues unsaved */ }
 }
 
+const SETTINGS_VERSION = 2;
+
 export function loadSettings() {
-  return { ...DEFAULT_SETTINGS, ...read(SETTINGS_KEY, {}) };
+  const saved = read(SETTINGS_KEY, {});
+  // v2: the water temperature field was chosen; fill it in where it was left empty.
+  if ((saved.settings_version || 1) < 2 && saved.temp_field_id == null) delete saved.temp_field_id;
+  return { ...DEFAULT_SETTINGS, ...saved, settings_version: SETTINGS_VERSION };
 }
 export const saveSettings = (s) => write(SETTINGS_KEY, s);
 
