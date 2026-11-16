@@ -3,10 +3,10 @@
   import { clock } from "../lib/dive.js";
 
   let { video, videoInput = $bindable(""), me, meError, extension, playing, onVideo, onDiveFile, onToken,
-        onPermission, onLicence, onClearSync, onPickDive, diveChoices = [] } = $props();
+        onPermission, onClearSync, onPickDive, diveChoices = [], tokenLeft = null, permissionOk = false } = $props();
 
   let tokenInput = $state("");
-  const LICENCES = ["CC0", "CC-BY", "CC-BY-NC", "CC-BY-SA", "CC-BY-ND", "CC-BY-NC-SA", "CC-BY-NC-ND"];
+  const hours = (s) => (s > 3600 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : `${Math.max(0, Math.ceil(s / 60))} min`);
   const dive = $derived(video?.dive);
 </script>
 
@@ -64,7 +64,8 @@
   <div class="step">
     <h3>3. iNaturalist login</h3>
     {#if me}
-      <p>Logged in as <strong>{me.login}</strong>{me.name ? ` (${me.name})` : ""}.</p>
+      <p>Logged in as <strong>{me.login}</strong>{me.name ? ` (${me.name})` : ""}.
+        {#if tokenLeft != null}<span class:warn={tokenLeft < 3600}>Token expires in {hours(tokenLeft)}.</span>{/if}</p>
     {:else}
       {#if meError}<p class="warn small">{meError}</p>{/if}
       <p class="small">Get a token from <a href="https://www.inaturalist.org/users/api_token" target="_blank" rel="noreferrer">inaturalist.org/users/api_token</a>
@@ -94,15 +95,20 @@
 
   <div class="step">
     <h3>5. Permission</h3>
-    <label>Licence the video owner agreed to
-      <select value={video?.permission.licence} onchange={(e) => onLicence(e.currentTarget.value)} disabled={!video}>
-        {#each LICENCES as l}<option>{l}</option>{/each}
-      </select>
-    </label>
+    {#if me}
+      <p class="small">Uploads use your iNaturalist account's licences: observations <strong>{me.observation_licence}</strong>,
+        photos <strong>{me.photo_licence}</strong>. Change them in your
+        <a href="https://www.inaturalist.org/users/edit" target="_blank" rel="noreferrer">iNaturalist account settings</a>.</p>
+    {:else}
+      <p class="small warn">Log in (step 3) to see the licence your photos will use.</p>
+    {/if}
+    {#if video?.permission.granted && !permissionOk}
+      <p class="small warn">Permission was given for {video.permission.licence}, but your photo licence is now {me?.photo_licence}. Tick again once the owner agrees.</p>
+    {/if}
     <label class="check">
-      <input type="checkbox" checked={video?.permission.granted} disabled={!video} onchange={(e) => onPermission(e.currentTarget.checked)} />
+      <input type="checkbox" checked={permissionOk} disabled={!video || !me} onchange={(e) => onPermission(e.currentTarget.checked)} />
       I have explicit permission from the owner of this video to create iNaturalist observations from it, and to
-      release its frames under the licence selected.
+      release its frames under {me?.photo_licence ?? "my account's photo licence"}.
     </label>
   </div>
 </section>

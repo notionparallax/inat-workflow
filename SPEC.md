@@ -141,7 +141,7 @@ A dive with no GPS fix is still accepted (§9.10).
 - Optional iNat project ID to add observations to.
 - Notes free text (e.g. a citation or project statement).
 
-The licence is not a capturer setting; it's chosen per video with the owner's permission (§9.6, §15).
+Licences follow the uploader's iNat account defaults (§9.6).
 
 ## 7. Frame capture
 
@@ -297,13 +297,13 @@ From iNat's list of annotations (checked 2026-11-16): Alive or Dead and Life sta
 
 ### 9.6 Licence
 
-The frames come from the diver's video, so the diver owns their copyright, not the capturer. The licence is therefore the **video owner's choice**:
+Observations and photos take the **uploader's iNaturalist account defaults** (decided 2026-11-16). The tool doesn't set a licence itself:
 
-- It's saved with the per-video permission (§15), not as a capturer setting.
-- Default: the most permissive licence iNat offers (CC0), for both observations and photos.
-- The capturer must confirm the owner agreed to that licence (§15).
+- iNat applies the account's default photo licence to uploaded photos, and setting a different licence per photo isn't straightforward through the API. Setting only the observation's licence would leave the observation and its photos licensed differently.
+- The permission step shows the account's observation and photo licences, and links to iNat's account settings for changing them.
+- The frames come from the diver's video, so the diver owns their copyright. The capturer must confirm the owner agrees to frames being released under the account's photo licence (§15). If the account's licence changes later, the confirmation must be given again.
 
-CC0, CC-BY and CC-BY-NC observations flow on to GBIF; other licences don't.
+CC0, CC-BY and CC-BY-NC observations and photos all flow on to GBIF, so any of these suits research use. CC-BY-NC rules out commercial reuse only.
 
 ### 9.7 Animated GIFs (v1.5)
 
@@ -450,7 +450,7 @@ Build note (v0.1.x): during development, `frontend/src/lib/devDefaults.js` fills
 
 ## 15. Permission and credit
 
-- Before the first upload for a video, the capturer chooses the licence the owner agreed to (default CC0) and must tick: *"I have explicit permission from the owner of this video to create iNaturalist observations from it, and to release its frames under the licence selected."* The confirmation and licence are saved per video ID.
+- Before the first upload for a video, the capturer must tick: *"I have explicit permission from the owner of this video to create iNaturalist observations from it, and to release its frames under <account photo licence>."* The confirmation and the licence it covered are saved per video ID; if the account's photo licence changes, the box must be ticked again.
 - If the capturer is the owner, the same step applies; it simply records their own choice.
 - Notes always credit the observer (diver) and the capturer separately (§9.3).
 - The observation is uploaded under the capturer's account, as iNat requires.
@@ -479,7 +479,7 @@ Build note (v0.1.x): during development, `frontend/src/lib/devDefaults.js` fills
 1. **Frame grabber test in a real browser** (highest priority): confirm the content script can draw the `<video>` to a canvas at 2160p, and that frame-by-frame seeking for bursts is fast and exact enough. The page-to-extension handshake works. Automated browsers can't test the rest, because YouTube shows them a "confirm you're not a bot" screen, so this needs a person in their own signed-in Chrome.
 2. Which water temperature observation field the scientist wants (§9.4). Depth uses field 558.
 3. Whether the Perdix can be set to a faster sample rate than 10 s and whether Subsurface keeps it.
-4. **Photo licences.** The first real upload (observation 415038559, 2026-11-16) showed photos take the uploader's account default (CC-BY-NC), not the licence chosen for the video (CC0). Photos need their licence set through the API, or the tool must check the account default matches before uploading.
+4. Storing captured frames in IndexedDB so a reload doesn't lose a draft or a failed upload (§11). Deferred for now.
 5. Whether a "head-mounted camera" note is useful to the scientist.
 6. How YouTube plays a 24 fps source (whether it keeps 24 fps). The extension estimates the frame rate during playback.
 7. Why the sample video (`MRja6VhCmMs`) ends ≈2 minutes before the dive does (e.g. the camera stopping, or a missing final GoPro file chapter). Two-point sync isn't possible for it, so it's the test case for one-point sync plus dragging the profile (§8.2).
@@ -496,6 +496,7 @@ Resolved questions, kept here so the reasoning isn't lost:
 | Origins the extension trusts | `localhost` for v1, plus a registered domain for the hosted tool. |
 | Browsers | Chrome (and Edge, which runs Chrome extensions) only for now. |
 | Paper | About the data, not the tool (§19). |
+| Licences | Follow the uploader's iNat account defaults, since photos take the account default anyway; CC-BY-NC is fine for research and GBIF (§9.6). Replaces the earlier per-video licence choice. |
 | Duplicates across capturers | Deferred (§4, Later). |
 | No GPS fix | Upload without a location; set it on iNat (§9.10). |
 | Which GPS position | The transmitter GPS recorded by the dive computer (`Start location`), falling back to the Subsurface dive site position. |

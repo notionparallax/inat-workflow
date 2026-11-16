@@ -53,7 +53,24 @@
   const drift = $derived(video?.sync.descentVid != null && video?.sync.ascentVid != null ? (sync.a - 1) * 100 : null);
   const missingLocation = $derived(video ? video.observations.filter((o) => o.status === "uploaded" && o.has_location === false) : []);
   const recent = $derived(video ? [...video.observations].reverse() : []);
-  const setupComplete = $derived(!!(video?.dive && video?.permission.granted));
+  // Permission covers a specific photo licence: the capturer's iNat account
+  // default, which uploaded photos take (SPEC §9.6).
+  const permissionOk = $derived(!!(video?.permission.granted && (!me || !video.permission.licence || video.permission.licence === me.photo_licence)));
+  const setupComplete = $derived(!!(video?.dive && permissionOk));
+  let now = $state(Date.now());
+  const tokenLeft = $derived(me?.token_expires_at ? me.token_expires_at - now / 1000 : null);
+
+  // Stamp the licence on a permission given before the account was known.
+  $effect(() => {
+    if (me && video?.permission.granted && !video.permission.licence) { video.permission.licence = me.photo_licence; persist(); }
+  });
+
+  function tokenExpired(message = "Your iNaturalist token has expired. Paste a new one in Setup, step 3.") {
+    me = null;
+    meError = message;
+    panel = "setup";
+    say(message, "error");
+  }
   const anchorCount = $derived(video ? [video.sync.descentVid, video.sync.ascentVid].filter((v) => v != null).length : 0);
 
   // Hide the setup panels once everything they ask for is done.
@@ -315,9 +332,12 @@
 
   async function upload() {
     if (!draft || busy) return;
-    if (!video.permission.granted) {
+    if (!me || (tokenLeft != null && tokenLeft <= 0)) return tokenExpired(me ? undefined : "Log in to iNaturalist first (Setup, step 3).");
+    if (!permissionOk) {
       panel = "setup";
-      return say("Confirm you have the video owner's permission (Setup, step 5) before uploading.", "error");
+      return say(video.permission.granted
+        ? `Your account's photo licence is now ${me.photo_licence}. Confirm the video owner agrees (Setup, step 5).`
+        : "Confirm you have the video owner's permission (Setup, step 5) before uploading.", "error");
     }
     busy = true;
     try {
@@ -336,7 +356,7 @@
       const meta = {
         video_id: video.videoId, t_vid, t_log: videoToLog(t_vid, sync), dive: $state.snapshot(video.dive),
         settings: { ...$state.snapshot(settings), capturer: settings.capturer || me?.login || "" },
-        licence: video.permission.licence, permission: true,
+        licence: null, permission: true, // licences follow the uploader's iNat account defaults
         positions: stills.map((f) => (f.position ? { x: f.position.x, y: f.position.y } : null)),
         crop_of, has_gif: false, annotations, dry_run: settings.dry_run,
       };
@@ -378,6 +398,7 @@
         say(`Observation ${rec.n} uploaded.`);
       }
     } catch (e) {
+      if (e.body?.status === 401) tokenExpired();
       rec.status = "failed";
       rec.error = e.message + (e.body?.body ? ` — ${JSON.stringify(e.body.body).slice(0, 300)}` : "");
       rec.progress = e.body?.progress || rec.progress || null;
@@ -435,6 +456,7 @@
   let pollTimer, extTimer;
   onMount(async () => {
     pollTimer = setInterval(poll, 250);
+    setInterval(() => (now = Date.now()), 30000);
     extTimer = setInterval(pollExtension, 2000);
     api.me().then((m) => (me = m)).catch((e) => (meError = e.status === 401 ? "No valid token yet." : e.message));
     api.terms().then((r) => (terms = r.terms)).catch(() => {});
@@ -483,7 +505,7 @@
         setDive(dives[0]);
       } catch (e) { say(`Couldn't load the default dive: ${e.message}`, "error"); }
     }
-    if (!video.permission.granted) video.permission = { ...DEV_DEFAULTS.permission };
+    if (!video.permission.granted) video.permission = { granted: true, licence: null };
     persist();
   }
 
@@ -507,7 +529,8 @@
     <span class="chip" class:ok={extension.found}>{extension.found ? "Extension ✓" : "No extension"}</span>
     <span class="chip" class:ok={me}>{me ? `iNat: ${me.login}` : "Not logged in"}</span>
     <span class="chip" class:ok={video?.dive}>{video?.dive ? `Dive #${video.dive.number ?? "?"}` : "No dive log"}</span>
-    <span class="chip" class:ok={video?.permission.granted}>{video?.permission.granted ? `Permission ✓ ${video.permission.licence}` : "No permission"}</span>
+    <span class="chip" class:ok={permissionOk}>{permissionOk ? `Permission ✓ ${video.permission.licence ?? ""}` : video?.permission.granted ? "Recheck permission" : "No permission"}</span>
+    {#if tokenLeft != null && tokenLeft < 3600}<span class="chip expiring">{tokenLeft > 0 ? `Token expires in ${Math.ceil(tokenLeft / 60)} min` : "Token expired"}</span>{/if}
     {#if settings.dry_run}<span class="chip dry">Dry run</span>{/if}
   </div>
   <nav>
@@ -522,8 +545,8 @@
     {#if panel === "setup"}
       <SetupPanel {video} bind:videoInput {me} {meError} {extension} {playing} {diveChoices}
                   onVideo={loadVideo} {onDiveFile} {onToken} onPickDive={(i) => setDive(diveChoices[i])}
-                  onPermission={(v) => { video.permission.granted = v; persist(); }}
-                  onLicence={(l) => { video.permission.licence = l; persist(); }}
+                  {tokenLeft} {permissionOk}
+                  onPermission={(v) => { video.permission = { granted: v, licence: v ? me?.photo_licence ?? null : null }; persist(); }}
                   onClearSync={() => { video.sync = { descentVid: null, ascentVid: null, dragOffset: 0 }; persist(); }} />
     {:else if panel === "settings"}
       <SettingsPanel {settings} onChange={updateSettings} />
@@ -629,6 +652,7 @@ Annotations: {JSON.stringify(o.preview.annotations)}</pre></details>
   .chip { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--track); color: var(--muted); }
   .chip.ok { color: var(--ok); }
   .chip.dry { background: var(--warn); color: #fff; }
+  .chip.expiring { background: var(--danger); color: #fff; }
   nav { margin-left: auto; display: flex; gap: 6px; }
   nav button.active { border-color: var(--accent); color: var(--accent); }
   .drawer { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg); max-height: 60vh; overflow: auto; }

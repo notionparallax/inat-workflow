@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +38,16 @@ _load_env()
 app = FastAPI(title=TOOL_NAME, version=__version__)
 client = Client(token=os.environ.get("INAT_API_TOKEN") or None)
 _terms_cache: list[dict[str, Any]] | None = None
+
+
+def _token_expiry(token: str | None) -> int | None:
+    """Expiry time (Unix seconds) from the JWT's payload, if readable."""
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        return int(json.loads(base64.urlsafe_b64decode(payload))["exp"])
+    except Exception:
+        return None
 
 
 def _inat_error(exc: INatError) -> JSONResponse:
@@ -84,8 +96,13 @@ def me() -> Any:
         if exc.status == 401:
             return JSONResponse(status_code=401, content={"error": "Token rejected or expired"})
         return _inat_error(exc)
+    expires = _token_expiry(client.token)
     return {"id": user["id"], "login": user["login"], "name": user.get("name"),
-            "time_zone": user.get("time_zone")}
+            "time_zone": user.get("time_zone"),
+            "observation_licence": user.get("preferred_observation_license"),
+            "photo_licence": user.get("preferred_photo_license"),
+            "token_expires_at": expires,
+            "token_expires_in_s": expires - int(time.time()) if expires else None}
 
 
 @app.get("/api/controlled-terms")

@@ -5,6 +5,6 @@ export const DEV_DEFAULTS = {
   videoUrl: "https://www.youtube.com/watch?v=MRja6VhCmMs",
   // Served by Vite from frontend/public/dev/.
   diveFile: "/dev/gordons_dive.ssrf",
-  permission: { granted: true, licence: "CC0" },
+  // Permission is granted automatically, for the account's photo licence.
   settings: { observer: "Ben Doherty" },
 };

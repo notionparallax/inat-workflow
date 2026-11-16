@@ -227,3 +227,12 @@ def test_api_requires_permission(dive):
     meta = {"video_id": "x", "t_vid": 1, "t_log": 1, "dive": dive, "permission": False}
     r = TestClient(app).post("/api/observations", data={"meta": json.dumps(meta)})
     assert r.status_code == 400
+
+
+def test_token_expiry():
+    from diveinat.app import _token_expiry
+
+    # Header and signature are irrelevant; payload {"user_id": 1, "exp": 1794882356}
+    token = "x.eyJ1c2VyX2lkIjoxLCJleHAiOjE3OTQ4ODIzNTZ9.y"
+    assert _token_expiry(token) == 1794882356
+    assert _token_expiry("not-a-jwt") is None

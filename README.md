@@ -48,7 +48,7 @@ Then open <http://localhost:5173> in Chrome (signed in to YouTube, or it may ref
 2. **Setup → Dive log:** choose the `.ssrf` file exported from Subsurface.
 3. **Sync:** pause where you go under and press **D**; where you surface, press **A**. If the video starts or ends
    mid-dive, set one point and drag the depth profile sideways until it lines up.
-4. **Permission:** pick the licence the video owner agreed to and tick the box.
+4. **Permission:** tick the box to confirm the video owner agrees to the licence your iNat account uses for photos.
 5. **Settings:** observer name, observation fields, and so on. **Dry run is on by default**: uploads only show
    what would be sent. Turn it off in Settings when you're ready for real uploads.
 
