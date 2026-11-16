@@ -479,7 +479,7 @@ Build note (v0.1.x): during development, `frontend/src/lib/devDefaults.js` fills
 1. **Frame grabber test in a real browser** (highest priority): confirm the content script can draw the `<video>` to a canvas at 2160p, and that frame-by-frame seeking for bursts is fast and exact enough. The page-to-extension handshake works. Automated browsers can't test the rest, because YouTube shows them a "confirm you're not a bot" screen, so this needs a person in their own signed-in Chrome.
 2. Which water temperature observation field the scientist wants (§9.4). Depth uses field 558.
 3. Whether the Perdix can be set to a faster sample rate than 10 s and whether Subsurface keeps it.
-4. On the first real upload, check that iNat accepts: annotations on observations with no taxon; the licence code sent as `CC0`; the time zone sent as an IANA name (`Australia/Sydney`). Photo licences currently follow the uploader's account default; check whether they can be set per photo through the API.
+4. **Photo licences.** The first real upload (observation 415038559, 2026-11-16) showed photos take the uploader's account default (CC-BY-NC), not the licence chosen for the video (CC0). Photos need their licence set through the API, or the tool must check the account default matches before uploading.
 5. Whether a "head-mounted camera" note is useful to the scientist.
 6. How YouTube plays a 24 fps source (whether it keeps 24 fps). The extension estimates the frame rate during playback.
 7. Why the sample video (`MRja6VhCmMs`) ends ≈2 minutes before the dive does (e.g. the camera stopping, or a missing final GoPro file chapter). Two-point sync isn't possible for it, so it's the test case for one-point sync plus dragging the profile (§8.2).
@@ -500,6 +500,7 @@ Resolved questions, kept here so the reasoning isn't lost:
 | No GPS fix | Upload without a location; set it on iNat (§9.10). |
 | Which GPS position | The transmitter GPS recorded by the dive computer (`Start location`), falling back to the Subsurface dive site position. |
 | Maximum photo size on iNat | 2048 px on the long edge (seen in photos' original dimensions), so crops are never smaller than that (§9.9). |
+| First real upload (observation 415038559) | iNat accepted: annotations with no taxon; licence code `CC0` on the observation; time zone as an IANA name (`Australia/Sydney`), with the observation time correct; depth in field 558. Photos were stored at 2048 × 1152, so frames were captured at more than 2048 px wide. Photo licences did not follow the video's licence (§18 item 4). |
 | Finding a video's observations on iNat | Searching observation descriptions for the video ID works (`q=<id>&search_on=description`). |
 | Non-divers / no dive log | No-log mode in v2 (§4). |
 
