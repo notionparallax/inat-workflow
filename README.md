@@ -53,7 +53,7 @@ Then open <http://localhost:5173> in Chrome (signed in to YouTube, or it may ref
    what would be sent. Turn it off in Settings when you're ready for real uploads.
 
 Then watch: **M** captures a burst of frames around the moment and opens them full-screen; arrow keys move between frames, **Space** or **1–9** selects up to four stills, and
-clicking the organism marks where it is, and **R** adds a crop box (uploaded as an extra photo). **C** goes to
+clicking the organism marks where it is, **R** adds a crop box (uploaded as an extra photo), and **G** makes an animated GIF around the current frame (uploaded first). **C** goes to
 annotations, **Enter** uploads. The **Shortcuts** button lists every key.
 
 ## Tests

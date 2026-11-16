@@ -4,8 +4,10 @@
   // a subject position (§9.8) and a crop box (§9.9).
   import { clock, region } from "../lib/dive.js";
   import { canCrop, defaultCropBox, minCropSize as minS } from "../lib/frames.js";
+  import GifMaker from "./GifMaker.svelte";
 
-  let { draft, highlightId, maxStills = 4, busy = false, onHighlight, onToggle, onPosition, onCrop, onClose, onComplete } = $props();
+  let { draft, highlightId, maxStills = 4, busy = false, onHighlight, onToggle, onPosition, onCrop, onClose, onComplete,
+        gifOpen = false, captureGif, onOpenGif, onCloseGif, onUseGif, onError } = $props();
 
   const frames = $derived(draft ? [...draft.frames].sort((a, b) => a.burst - b.burst || a.time - b.time) : []);
   const current = $derived(frames.find((f) => f.id === highlightId) || frames[0]);
@@ -80,11 +82,15 @@
       <span>Frame {index + 1} of {frames.length} · burst {current.burst} · {clock(current.time)} ({current.time.toFixed(3)} s) · sharpness {current.sharpness}{current.rank === 1 ? " (sharpest in burst)" : ""} · {current.width}×{current.height}</span>
       <span class="count">{selectedCount} of up to {maxStills} selected</span>
       <span class="spacer"></span>
+      <button onclick={onOpenGif} disabled={gifOpen}>{draft.gif ? "GIF ✓" : "Make GIF"} <kbd>G</kbd></button>
       <button onclick={onClose} title="Close the picker and keep watching; press M again to add frames from later in the video">More angles later in the video <kbd>M</kbd></button>
       <button class="primary" onclick={onComplete} disabled={!selectedCount || busy}>Complete <kbd>C</kbd></button>
       <button onclick={onClose}>Close <kbd>Esc</kbd></button>
     </header>
 
+    {#if gifOpen}
+      <GifMaker frame={current} existing={draft.gif} capture={captureGif} onUse={onUseGif} onClose={onCloseGif} {onError} />
+    {:else}
     <div class="stage">
       <button class="nav" onclick={() => onHighlight(frames[Math.max(0, index - 1)].id)} disabled={index <= 0} aria-label="Previous frame">‹</button>
       <div class="imgwrap">
@@ -122,6 +128,8 @@
         A crop is uploaded as an extra photo; drag it to move, drag its corner to resize. <kbd>←</kbd>/<kbd>→</kbd> next/previous frame.
       </span>
     </div>
+
+    {/if}
 
     <div class="strip" bind:this={stripEl}>
       {#each frames as f (f.id)}

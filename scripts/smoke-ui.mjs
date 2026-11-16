@@ -52,6 +52,17 @@ await page.locator(".thumb:not(.selected) .sel").first().click();
 await page.screenshot({ path: path.join(out, "ui-picker.png") });
 const selected = await page.locator(".thumb.selected").count();
 
+// Make a GIF of the crop area around the current frame (synthetic frames in dev).
+await page.locator(".thumb.current .pick").click();
+await page.keyboard.press("g");
+const t0 = Date.now();
+await page.getByRole("button", { name: "Make GIF", exact: true }).click();
+await page.getByRole("button", { name: "Use this GIF" }).waitFor({ timeout: 60000 });
+const gifMs = Date.now() - t0;
+const gifInfo = await page.locator(".gif .info p").innerText();
+await page.screenshot({ path: path.join(out, "ui-gif.png") });
+await page.getByRole("button", { name: "Use this GIF" }).click();
+
 // Complete, then upload (dry run) and read back what would be sent.
 await page.keyboard.press("c");
 await page.keyboard.press("Enter");
@@ -60,6 +71,6 @@ await page.locator(".row.dry-run summary").first().click();
 await page.screenshot({ path: path.join(out, "ui-after-upload.png"), fullPage: true });
 const preview = await page.locator(".row.dry-run pre").first().innerText();
 
-console.log(JSON.stringify({ drawerOpen, sync, cropLabel, selected, errors }, null, 2));
+console.log(JSON.stringify({ drawerOpen, sync, cropLabel, selected, gifMs, gifInfo, errors }, null, 2));
 console.log(preview);
 await browser.close();

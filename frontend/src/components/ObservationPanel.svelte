@@ -3,7 +3,7 @@
   // full-screen picker; this panel summarises it and holds annotations.
   import { clock, region } from "../lib/dive.js";
 
-  let { draft, stage, busy, terms = [], maxStills = 4, onOpenPicker, onComplete, onBack, onUpload, onDiscard, onAnnotation } = $props();
+  let { draft, stage, busy, terms = [], maxStills = 4, onOpenPicker, onRemoveGif, onComplete, onBack, onUpload, onDiscard, onAnnotation } = $props();
 
   const selected = $derived(draft ? draft.frames.filter((f) => f.selected).sort((a, b) => a.time - b.time) : []);
   const burstCount = $derived(draft ? new Set(draft.frames.map((f) => f.burst)).size : 0);
@@ -25,6 +25,13 @@
 
     {#if busy}<p class="busy">Capturing frames…</p>{/if}
 
+    {#if draft.gif}
+      <figure class="gifbox">
+        <img src={draft.gif.url} alt="Animated GIF" />
+        <figcaption>GIF (photo 1) · {draft.gif.width}×{draft.gif.height} · {draft.gif.frames} frames · {(draft.gif.bytes / 1024 / 1024).toFixed(1)} MB
+          <button class="linkish" onclick={onRemoveGif}>remove</button></figcaption>
+      </figure>
+    {/if}
     {#if selected.length}
       <div class="stills">
         {#each selected as f, i (f.id)}
@@ -34,7 +41,7 @@
               {#if f.position}<span class="pin" style="left:{f.position.x}%;top:{f.position.y}%"></span>{/if}
               {#if f.cropBox}<span class="cropmark" style="left:{f.cropBox.x * 100}%;top:{f.cropBox.y * 100}%;width:{f.cropBox.s * 100}%;height:{f.cropBox.s * 100}%"></span>{/if}
             </button>
-            <figcaption>Photo {i + 1} · {clock(f.time)}{f.position ? ` · subject ${region(f.position.x, f.position.y)}` : ""}{f.cropBox ? " · + crop" : ""}</figcaption>
+            <figcaption>Photo {i + 1 + (draft.gif ? 1 : 0)} · {clock(f.time)}{f.position ? ` · subject ${region(f.position.x, f.position.y)}` : ""}{f.cropBox ? " · + crop" : ""}</figcaption>
           </figure>
         {/each}
       </div>
@@ -82,6 +89,8 @@
   .busy { color: var(--accent); margin: 0; }
   .stills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   figure { margin: 0; }
+  .gifbox img { display: block; width: 100%; border: 1px solid var(--border); }
+  .linkish { border: none; background: none; padding: 0 0 0 6px; color: var(--accent); font-size: 12px; }
   .still { position: relative; display: block; width: 100%; padding: 0; border: 1px solid var(--border); background: none; line-height: 0; }
   .still img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
   .cropmark { position: absolute; border: 1px dashed #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.4); pointer-events: none; }

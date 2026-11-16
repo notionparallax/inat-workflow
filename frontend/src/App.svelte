@@ -35,6 +35,7 @@
   let diveChoices = $state([]);
   let pickerOpen = $state(false);
   let pickerHighlight = $state(null);
+  let gifOpen = $state(false);
 
   let player = null;
   let lastPollT = null;
@@ -270,6 +271,22 @@
     }
   }
 
+  // Frames for a GIF: the extension steps through the range at GIF frame rate.
+  async function captureGif({ center, before, after, fps }) {
+    if (extension.found) {
+      const r = await grabber.burst({ center, before, after, fps, quality: 0.85, maxFrames: 160 });
+      return r.frames.map((f) => f.blob);
+    }
+    if (import.meta.env.DEV) return (await synthFrames(Math.round((before + after) * fps) + 1, center - before, fps)).map((f) => f.blob);
+    throw new Error("Making a GIF needs the frame grabber extension.");
+  }
+  function useGif(gif) {
+    if (draft.gif) URL.revokeObjectURL(draft.gif.url);
+    draft.gif = gif;
+    gifOpen = false;
+    say(`GIF added (${(gif.bytes / 1024 / 1024).toFixed(1)} MB). It will be the observation's first photo.`);
+  }
+
   function toggleFrame(frame) {
     if (frame.selected) frame.selected = false;
     else if (draft.frames.filter((f) => f.selected).length >= MAX_STILLS) say(`Up to ${MAX_STILLS} stills per observation.`);
@@ -295,6 +312,7 @@
     pickerHighlight = order[Math.max(0, Math.min(order.length - 1, i + step))].id;
   }
   function pickerKey(key) {
+    if (gifOpen) { if (key === "Escape") gifOpen = false; return; }
     const order = draft ? pickerOrder() : [];
     const current = order.find((f) => f.id === pickerHighlight);
     switch (key) {
@@ -302,6 +320,7 @@
       case "ArrowRight": case ".": return movePicker(1);
       case " ": case "x": return current && toggleFrame(current);
       case "Enter": case "Escape": pickerOpen = false; return;
+      case "g": gifOpen = true; return;
       case "c": pickerOpen = false; return complete();
       case "m": pickerOpen = false; return say("Play on, and press M again to add frames from later in the video.");
       case "r":
@@ -325,9 +344,11 @@
     if (!draft) return;
     if (!silent && !confirm(`Discard observation ${draft.n}?`)) return;
     draft.frames.forEach((f) => URL.revokeObjectURL(f.url));
+    if (draft.gif) URL.revokeObjectURL(draft.gif.url);
     draft = null;
     stage = "idle";
     pickerOpen = false;
+    gifOpen = false;
   }
 
   async function upload() {
@@ -343,6 +364,7 @@
     try {
       const stills = draft.frames.filter((f) => f.selected).sort((a, b) => a.time - b.time);
       const photos = stills.map((f, i) => ({ blob: f.blob, filename: `still-${i + 1}.jpg` }));
+      if (draft.gif) photos.unshift({ blob: draft.gif.blob, filename: "animation.gif" });
       const crop_of = [];
       for (const [i, f] of stills.entries()) {
         if (!f.cropBox) continue;
@@ -358,16 +380,17 @@
         settings: { ...$state.snapshot(settings), capturer: settings.capturer || me?.login || "" },
         licence: null, permission: true, // licences follow the uploader's iNat account defaults
         positions: stills.map((f) => (f.position ? { x: f.position.x, y: f.position.y } : null)),
-        crop_of, has_gif: false, annotations, dry_run: settings.dry_run,
+        crop_of, has_gif: !!draft.gif, annotations, dry_run: settings.dry_run,
       };
       const record = {
         id: crypto.randomUUID(), n: draft.n, t_vid, t_log: meta.t_log, status: "uploading",
         frames: stills.map((f) => ({ time: f.time, position: f.position ? { ...f.position } : null, cropBox: f.cropBox ? { ...f.cropBox } : null })),
-        annotations, created: new Date().toISOString(),
+        annotations, has_gif: !!draft.gif, created: new Date().toISOString(),
       };
       video.observations.push(record);
       pendingUploads.set(record.id, { meta, photos });
       draft.frames.forEach((f) => URL.revokeObjectURL(f.url));
+      if (draft.gif) URL.revokeObjectURL(draft.gif.url);
       draft = null;
       stage = "idle";
       persist();
@@ -442,12 +465,12 @@
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = e.target?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    const handled = [" ", "k", "j", "l", "x", "r", "ArrowLeft", "ArrowRight", ",", ".", "<", ">", "n", "m", "c", "d", "a", "Escape", "Enter",
+    const handled = [" ", "k", "j", "l", "x", "r", "g", "ArrowLeft", "ArrowRight", ",", ".", "<", ">", "n", "m", "c", "d", "a", "Escape", "Enter",
                      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
     const key = e.key.length === 1 && !["<", ">"].includes(e.key) ? e.key.toLowerCase() : e.key;
     if (!handled.includes(key)) return;
     if (key === "Enter" && stage !== "annotating" && !pickerOpen) return;
-    if ((key === "x" || key === "r") && !pickerOpen) return;
+    if ((key === "x" || key === "r" || key === "g") && !pickerOpen) return;
     e.preventDefault();
     handleKey(e.key, e.shiftKey);
   }
@@ -473,6 +496,15 @@
       async fakeBurst(count = 24) {
         ensureDraft();
         const burstNo = draft.nextBurst++;
+        const frames = await synthFrames(count, currentTime, 24);
+        addFrames(frames, burstNo);
+        openPicker(draft.frames.find((f) => f.burst === burstNo && f.rank === 1)?.id);
+      },
+    };
+  }
+
+  // Development only: synthetic 4K frames.
+  async function synthFrames(count, start, fps) {
         const frames = [];
         for (let i = 0; i < count; i++) {
           const c = new OffscreenCanvas(3840, 2160);
@@ -484,13 +516,10 @@
           ctx.beginPath(); ctx.ellipse(1400 + i * 40, 1080, 320, 140, 0, 0, Math.PI * 2); ctx.fill();
           ctx.filter = "none";
           ctx.fillStyle = "#fff"; ctx.font = "128px sans-serif"; ctx.fillText(`test frame ${i + 1}`, 120, 240);
-          frames.push({ time: currentTime + i / 24, width: 3840, height: 2160, sharpness: 100 - Math.abs(i - count / 2) * 4,
+          frames.push({ time: start + i / fps, width: 3840, height: 2160, sharpness: 100 - Math.abs(i - count / 2) * 4,
                         blob: await c.convertToBlob({ type: "image/jpeg", quality: 0.8 }) });
         }
-        addFrames(frames, burstNo);
-        openPicker(draft.frames.find((f) => f.burst === burstNo && f.rank === 1)?.id);
-      },
-    };
+        return frames;
   }
 
   // TEMPORARY: fill in hard-coded values during development (lib/devDefaults.js).
@@ -562,6 +591,7 @@
           <tr><td><kbd>&lt;</kbd> / <kbd>&gt;</kbd></td><td>Slower / faster</td><td><kbd>C</kbd></td><td>Complete → annotations</td></tr>
           <tr><td><kbd>0</kbd>–<kbd>9</kbd></td><td>Jump to 0–90 % (when not capturing)</td><td><kbd>Enter</kbd></td><td>Upload (from annotations)</td></tr>
           <tr><td><kbd>D</kbd> / <kbd>A</kbd></td><td>Set descent / ascent sync point</td><td><kbd>Esc</kbd></td><td>Back / discard</td></tr>
+          <tr><td colspan="2"></td><td><kbd>R</kbd> / <kbd>G</kbd></td><td>Crop box / make GIF (in the frame picker)</td></tr>
         </tbody>
       </table>
       <p class="muted">Shortcuts also work while the player has focus, if the extension is installed.</p>
@@ -599,6 +629,7 @@
 
   <aside class="right">
     <ObservationPanel {draft} {stage} {busy} {terms} maxStills={MAX_STILLS} onOpenPicker={openPicker}
+                      onRemoveGif={() => { URL.revokeObjectURL(draft.gif.url); draft.gif = null; }}
                       onComplete={complete} onBack={() => (stage = "capturing")} onUpload={upload} onDiscard={() => discard()}
                       onAnnotation={(attr, value) => { draft.annotations[attr] = value; }} />
 
@@ -640,7 +671,9 @@ Annotations: {JSON.stringify(o.preview.annotations)}</pre></details>
   <FramePicker {draft} highlightId={pickerHighlight} maxStills={MAX_STILLS} {busy}
                onHighlight={(id) => (pickerHighlight = id)} onToggle={toggleFrame}
                onPosition={(f, p) => { f.position = p; }} onCrop={(f, box) => { f.cropBox = box; }}
-               onClose={() => (pickerOpen = false)} onComplete={() => { pickerOpen = false; complete(); }} />
+               onClose={() => (pickerOpen = false)} onComplete={() => { pickerOpen = false; complete(); }}
+               {gifOpen} {captureGif} onOpenGif={() => (gifOpen = true)} onCloseGif={() => (gifOpen = false)}
+               onUseGif={useGif} onError={(m) => say(m, "error")} />
 {/if}
 
 {#if toast}<div class="toast {toast.kind}" role="status">{toast.message}</div>{/if}

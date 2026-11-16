@@ -42,13 +42,13 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 - A timestamped YouTube link in every observation's notes.
 - Subject position (*x*% / *y*%) on each still, written into the notes.
 - Optional crop box on each still, uploaded as an extra photo (§9.9).
+- Animated GIF of a stretch of video around a frame, made in the browser and uploaded as the first photo (§9.7).
 - YouTube chapter titles generated from settled identifications, as copy-paste text.
 - Timeline markers for captured observations and shading for reviewed sections, saved in browser storage.
 - Keyboard-first controls.
 
 ### Version 1.5
 
-- Animated GIF built from a range of frames, uploaded as the first photo.
 - Downloading an observation's captured frames as a bundle, so they can be reused later.
 
 ### Version 2
@@ -81,7 +81,7 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 └───────────────┬────────────────────────────────────────────────────┘
                 │ HTTP (localhost)
 ┌───────────────▼──────── Python back end (FastAPI) ─────────────────┐
-│  .ssrf parser       │  GIF encoder (v1.5)  │  iNat client          │
+│  .ssrf parser       │                      │  iNat client          │
 │  sync maths         │  JPEG encoding       │  (pyinaturalist,      │
 │  time zone from GPS │                      │   throttling, retry)  │
 └────────────────────────────────────────────────────────────────────┘
@@ -91,7 +91,7 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 
 The back end holds the iNat token, so the browser never sends it anywhere except `localhost`. Once the tool is hosted (v2), the same back end does the OAuth token exchange.
 
-**Is Python needed for GIFs?** No. GIFs can be encoded in the browser (e.g. `gifenc`, or a WebAssembly build of `gifski`). Python is used because the back end exists anyway for the token, uploads and log parsing, and Python encoders (Pillow, or `gifski`/ffmpeg called as subprocesses) give good palette quality with little effort. This choice can be revisited.
+**GIFs** are encoded in the browser (`gifenc`), so frames never travel to the back end until upload (decided 2026-11-16).
 
 ## 6. Inputs
 
@@ -228,7 +228,7 @@ The tool shows a mismatch warning if the video's span after sync differs from th
 
 1. Press **N** (new observation). The previous observation must be completed or discarded.
 2. Watch, and press **M** to mark. A burst is captured (§7.3) and opens in a **full-screen frame picker**: one frame shown as large as the screen allows, with every captured frame in a strip of thumbnails underneath (sharpness bar under each). Arrow keys or `,`/`.` move between frames; Space selects; `1`–`9` select the sharpest frames of the latest burst; `M` captures another burst without leaving; `Esc` closes. Frames are large enough to judge focus and camouflage.
-3. Select 1–4 stills from one or more bursts. All marks within one observation are assumed to be **the same organism**. (v1.5: select a frame range for the GIF, which may overlap the stills or be separate.)
+3. Select 1–4 stills from one or more bursts. All marks within one observation are assumed to be **the same organism**. A GIF can also be made from a stretch of video around any frame (§9.7).
 4. Optionally click the organism in the large view to record where it is in the frame (§9.8). Clicking an unselected frame selects it and marks the position in one step.
 5. Press **C** (complete). The annotation form appears; set values with clicks or keys, or leave them unset.
 6. Confirm. The observation uploads in the background and the user carries on watching.
@@ -250,7 +250,7 @@ iNat convention is one observation per individual per place and time. If the sam
 | Description | Notes template (§9.3) |
 | Observation fields | Depth, water temperature (§9.4) |
 | Annotations | As set by the user; all unset by default (§9.5) |
-| Photos | Optional GIF first (v1.5), then 1–4 stills as JPEG, then any crops (§9.9) |
+| Photos | Optional GIF first (§9.7), then 1–4 stills as JPEG, then any crops (§9.9) |
 | Project | Optional; the target project already collects observations by geofence |
 | Licence | §9.6 |
 
@@ -305,11 +305,14 @@ Observations and photos take the **uploader's iNaturalist account defaults** (de
 
 CC0, CC-BY and CC-BY-NC observations and photos all flow on to GBIF, so any of these suits research use. CC-BY-NC rules out commercial reuse only.
 
-### 9.7 Animated GIFs (v1.5)
+### 9.7 Animated GIFs
 
-- Built from a contiguous range of burst frames.
-- 800 px wide, 8–12 fps, 2–4 s, kept under ≈5 MB (larger GIFs often fail to upload to iNat).
-- Uploaded as the **first** photo, so it becomes the observation's thumbnail.
+Made from the frame picker (`G`), around the frame being viewed:
+
+- The user sets how many seconds before and after the frame (default 1.5 s each, so 3 s), the frame rate (default 10 fps) and the width (default 800 px). Optionally the GIF shows only the frame's crop box area (§9.9), which keeps small subjects visible.
+- The extension steps through that stretch of video at the GIF frame rate (§7.3), so these frames are captured separately from the stills.
+- Encoded **in the browser** with `gifenc`, using one palette for the whole animation to avoid flicker. If the result is over ≈5 MB (larger GIFs often fail to upload to iNat), the tool reduces colours to 128, then 64, then shrinks the size, until it fits.
+- The real GIF is previewed before it's added. One GIF per observation, uploaded as the **first** photo, so it becomes the thumbnail. The notes say "Photo 1 is an animated GIF from the video."
 - Risk: iNat staff have said animated GIFs were never officially supported and may be removed. The YouTube link in the notes is the fallback. iNat accepts JPEG, PNG and GIF only; WebP and video are not accepted.
 
 ### 9.8 Subject position in the frame
@@ -330,7 +333,7 @@ iNat stores photos at most 2048 px on the long edge, so a 4K frame loses about h
 - Dragged to move, and resized from its corner. It keeps the frame's aspect ratio and **can't be smaller than 2048 px on the long edge**, so iNat never has to scale it up and the crop uses every pixel iNat will keep.
 - Offered only for frames larger than 2048 px (a 1080p frame already fits).
 - One crop per still, optional.
-- Photo order: GIF (v1.5), then the full stills, then the crops. The full frame stays the thumbnail.
+- Photo order: GIF, then the full stills, then the crops. The full frame stays the thumbnail.
 - Crops are new images cut from the full-resolution frame, and the notes say which photos are crops ("Photo 4 is a full-resolution crop of photo 2").
 
 ### 9.10 Dives with no GPS fix
@@ -471,7 +474,7 @@ Build note (v0.1.x): during development, `frontend/src/lib/devDefaults.js` fills
 | Log parsing      | Python XML parser for `.ssrf`               |
 | Time zone lookup | `timezonefinder` (offline)                  |
 | Sharpness        | Variance of the Laplacian (OpenCV or NumPy) |
-| GIF              | Pillow or gifski (v1.5)                     |
+| GIF              | gifenc, in the browser                      |
 | Licence          | MIT                                         |
 
 ## 18. Open questions and things to verify
