@@ -4,7 +4,7 @@
   import { clock, logToVideo } from "../lib/dive.js";
 
   let { duration = 0, currentTime = 0, dive = null, sync, syncPoints = {}, reviewed = [], observations = [],
-        onSeek, onDrag } = $props();
+        dragHint = "moves it", onSeek, onDrag } = $props();
 
   let width = $state(800);
   const H = 150, PROFILE_TOP = 26, PROFILE_H = 104;
@@ -37,9 +37,8 @@
     if (!drag) return;
     if (Math.abs(e.offsetX - drag.x0) > 4 && drag.inProfile && dive) drag.moved = true;
     if (drag.moved) {
-      const dt = ((e.offsetX - drag.last) / width) * duration;
+      onDrag?.(tAt(drag.last), tAt(e.offsetX));
       drag.last = e.offsetX;
-      onDrag?.(dt);
     }
   }
   function up(e) {
@@ -97,7 +96,7 @@
     <span><i class="sw dot dry-run"></i>dry run</span>
     <span><i class="sw dot uploading"></i>uploading</span>
     <span><i class="sw dot failed"></i>failed</span>
-    <span class="hint">Click to jump · drag the profile sideways to line it up with the video</span>
+    <span class="hint">Click to jump · drag the profile to line it up ({dragHint})</span>
   </div>
 </div>
 

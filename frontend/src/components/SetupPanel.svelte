@@ -49,7 +49,13 @@
       <dl>
         <dt>Descent</dt><dd>{video.sync.descentVid != null ? `video ${clock(video.sync.descentVid)} = log ${clock(dive.descent_s)}` : "not set"}</dd>
         <dt>Ascent</dt><dd>{video.sync.ascentVid != null ? `video ${clock(video.sync.ascentVid)} = log ${clock(dive.ascent_s)}` : "not set"}</dd>
-        <dt>Dragged</dt><dd>{(video.sync.dragOffset || 0).toFixed(1)} s</dd>
+        {#if video.sync.descentVid != null || video.sync.ascentVid != null}
+          {#if !(video.sync.descentVid != null && video.sync.ascentVid != null)}
+            <dt>Stretch</dt><dd>{(((video.sync.scale || 1) - 1) * 100).toFixed(2)} % (drag the profile to adjust)</dd>
+          {/if}
+        {:else}
+          <dt>Dragged</dt><dd>{(video.sync.dragOffset || 0).toFixed(1)} s</dd>
+        {/if}
       </dl>
       <button onclick={onClearSync}>Reset sync</button>
     {/if}

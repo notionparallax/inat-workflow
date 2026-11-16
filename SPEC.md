@@ -48,6 +48,7 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 ### Version 1.5
 
 - Animated GIF built from a range of frames, uploaded as the first photo.
+- Detail crops: full-resolution crops around the subject position (§9.9).
 - Downloading an observation's captured frames as a bundle, so they can be reused later.
 
 ### Version 2
@@ -172,7 +173,7 @@ Pressing **mark** captures a short burst around the current moment, not a single
 1. Pause the video.
 2. Step through every frame within a configurable window around the marked moment (default −0.5 s to +0.5 s), seeking frame by frame and grabbing each one once it's rendered.
 3. Score each frame for sharpness (variance of the Laplacian, computed in the browser or back end).
-4. Show the burst as a filmstrip, sharpest frames highlighted; the sharpest is pre-selected.
+4. Open the burst in a full-screen frame picker (§9.1), sharpest frames numbered; the sharpest is pre-selected.
 5. Return to the marked moment, paused or playing as before.
 
 At a 24 fps source, a 1 s window gives 24 frames, which is plenty to find a sharp one. A single-frame mode (grab exactly the current frame) is also available.
@@ -205,7 +206,10 @@ where *b* is the offset, and *a* is a drift factor, defaulting to 1.
 
 - **Two-point (preferred):** the user clicks the video frame where the descent begins and the frame where they surface. These are matched to the log's descent and ascent anchors (§6.2). Two points give both *a* and *b*.
 - **One-point:** descent only; *a* = 1.
-- **Drag:** if the video starts or ends mid-dive, the user drags the depth profile along the timeline until features line up (e.g. a stop, a sharp descent), then fine-tunes it.
+- **Drag:** if the video starts or ends mid-dive, the user drags the depth profile along the timeline until features line up (e.g. a stop, a sharp descent). What dragging does depends on how many sync points are set:
+  - none: it shifts the whole profile (offset *b*, with *a* = 1);
+  - one (usually the descent): the profile stays pinned at that point and dragging **stretches** it (changes *a*), to correct clock drift without losing the anchor. Stretch is limited to ±50 %;
+  - two: the profile is fixed, and dragging does nothing until sync is reset.
 
 Sync isn't accurate to better than the log's sample interval (≈10 s), which is acceptable for depth and temperature.
 
@@ -224,9 +228,9 @@ The tool shows a mismatch warning if the video's span after sync differs from th
 ### 9.1 Workflow (modal)
 
 1. Press **N** (new observation). The previous observation must be completed or discarded.
-2. Watch, and press **M** to mark. A burst is captured (§7.3) and shown as a filmstrip.
+2. Watch, and press **M** to mark. A burst is captured (§7.3) and opens in a **full-screen frame picker**: one frame shown as large as the screen allows, with every captured frame in a strip of thumbnails underneath (sharpness bar under each). Arrow keys or `,`/`.` move between frames; Space selects; `1`–`9` select the sharpest frames of the latest burst; `M` captures another burst without leaving; `Esc` closes. Frames are large enough to judge focus and camouflage.
 3. Select 1–4 stills from one or more bursts. All marks within one observation are assumed to be **the same organism**. (v1.5: select a frame range for the GIF, which may overlap the stills or be separate.)
-4. Optionally click the organism on each selected still to record where it is in the frame (§9.8).
+4. Optionally click the organism in the large view to record where it is in the frame (§9.8). Clicking an unselected frame selects it and marks the position in one step.
 5. Press **C** (complete). The annotation form appears; set values with clicks or keys, or leave them unset.
 6. Confirm. The observation uploads in the background and the user carries on watching.
 
@@ -247,7 +251,7 @@ iNat convention is one observation per individual per place and time. If the sam
 | Description | Notes template (§9.3) |
 | Observation fields | Depth, water temperature (§9.4) |
 | Annotations | As set by the user; all unset by default (§9.5) |
-| Photos | Optional GIF first (v1.5), then 1–4 stills as JPEG, then detail crops (§9.9) |
+| Photos | Optional GIF first (v1.5), then 1–4 stills as JPEG, then detail crops (v1.5, §9.9) |
 | Project | Optional; the target project already collects observations by geofence |
 | Licence | §9.6 |
 
@@ -319,7 +323,7 @@ Wide-angle frames often contain a small organism among a lot of reef. Context is
 - Especially useful when one frame is reused for several observations (§9.1): the point says which organism this observation is about.
 - Photos are uploaded unaltered. A later option could add an extra copy with a ring drawn around the subject, placed **last** so it never becomes the thumbnail.
 
-### 9.9 Detail crops
+### 9.9 Detail crops (v1.5)
 
 iNat downsizes photos (believed to be at most 2048 px on the long edge; to verify), so a 4K frame loses about half its linear resolution and small subjects lose detail. Where a still has a subject position (§9.8), the tool adds a **detail crop** as an extra photo:
 
@@ -440,7 +444,9 @@ The page re-implements YouTube's standard shortcuts (keys pressed inside the ifr
 └──────────────────────────────────────────────┴──────────────────────┘
 ```
 
-A setup screen before work begins covers: video URL, log file, sync, token check, extension check, and the permission checkbox.
+A setup screen before work begins covers: video URL, log file, sync, token check, extension check, and the permission checkbox. It hides itself once the video, dive log and permission are all in place, leaving a row of status chips; the Setup button reopens it.
+
+Build note (v0.1.x): during development, `frontend/src/lib/devDefaults.js` fills in the sample video, dive log, permission and observer name automatically. It's temporary and switched off by setting `enabled: false`.
 
 ## 15. Permission and credit
 

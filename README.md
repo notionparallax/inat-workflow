@@ -52,8 +52,8 @@ Then open <http://localhost:5173> in Chrome (signed in to YouTube, or it may ref
 5. **Settings:** observer name, observation fields, and so on. **Dry run is on by default**: uploads only show
    what would be sent. Turn it off in Settings when you're ready for real uploads.
 
-Then watch: **M** captures a burst of frames around the moment, **1–9** or clicking selects up to four stills,
-clicking a selected still marks where the organism is (and adds a full-resolution detail crop), **C** goes to
+Then watch: **M** captures a burst of frames around the moment and opens them full-screen; arrow keys move between frames, **Space** or **1–9** selects up to four stills, and
+clicking the organism marks where it is. **C** goes to
 annotations, **Enter** uploads. The **Shortcuts** button lists every key.
 
 ## Tests

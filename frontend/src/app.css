@@ -72,6 +72,7 @@ kbd {
   border-radius: 3px;
   background: var(--bg);
 }
+button.primary kbd { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.45); color: #fff; }
 code { font-family: var(--mono); font-size: 0.9em; }
 .muted { color: var(--muted); }
 .warn { color: var(--warn); }

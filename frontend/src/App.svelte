@@ -5,11 +5,12 @@
   import SetupPanel from "./components/SetupPanel.svelte";
   import SettingsPanel from "./components/SettingsPanel.svelte";
   import ChaptersPanel from "./components/ChaptersPanel.svelte";
+  import FramePicker from "./components/FramePicker.svelte";
+  import { DEV_DEFAULTS } from "./lib/devDefaults.js";
   import { api } from "./lib/api.js";
   import { createGrabber } from "./lib/grabber.js";
   import { loadYouTubeApi, PLAYER_ERRORS } from "./lib/youtube.js";
-  import { addRange, clock, interpolate, syncFrom, videoIdFrom, videoToLog } from "./lib/dive.js";
-  import { makeCrop } from "./lib/frames.js";
+  import { addRange, clock, dragSync, interpolate, syncFrom, videoIdFrom, videoToLog } from "./lib/dive.js";
   import { loadLastVideo, loadSettings, loadVideoState, saveLastVideo, saveSettings, saveVideoState } from "./lib/store.svelte.js";
 
   const MAX_STILLS = 4;
@@ -31,6 +32,8 @@
   let panel = $state("setup"); // setup | settings | chapters | help | null
   let toast = $state(null);
   let diveChoices = $state([]);
+  let pickerOpen = $state(false);
+  let pickerHighlight = $state(null);
 
   let player = null;
   let lastPollT = null;
@@ -49,6 +52,15 @@
   const drift = $derived(video?.sync.descentVid != null && video?.sync.ascentVid != null ? (sync.a - 1) * 100 : null);
   const missingLocation = $derived(video ? video.observations.filter((o) => o.status === "uploaded" && o.has_location === false) : []);
   const recent = $derived(video ? [...video.observations].reverse() : []);
+  const setupComplete = $derived(!!(video?.dive && video?.permission.granted));
+  const anchorCount = $derived(video ? [video.sync.descentVid, video.sync.ascentVid].filter((v) => v != null).length : 0);
+
+  // Hide the setup panels once everything they ask for is done.
+  let wasComplete = false;
+  $effect(() => {
+    if (setupComplete && !wasComplete && panel === "setup") panel = null;
+    wasComplete = setupComplete;
+  });
 
   const grabber = createGrabber({
     getIframe: () => player?.getIframe?.(),
@@ -176,12 +188,19 @@
     if (!video?.dive) return say("Load a dive log first.", "error");
     video.sync[`${which}Vid`] = player?.getCurrentTime?.() ?? currentTime;
     video.sync.dragOffset = 0;
+    video.sync.scale = 1;
     persist();
     say(`${which === "descent" ? "Descent" : "Ascent"} set at ${clock(video.sync[`${which}Vid`])}.`);
   }
-  function onDrag(dt) {
+  let dragWarned = false;
+  function onDrag(fromT, toT) {
     if (!video?.dive) return;
-    video.sync.dragOffset -= sync.a * dt;
+    const patch = dragSync(video.sync, video.dive, fromT, toT);
+    if (!patch) {
+      if (anchorCount === 2 && !dragWarned) { say("Both sync points are set, so the profile is fixed. Reset sync in Setup to drag it."); dragWarned = true; }
+      return;
+    }
+    Object.assign(video.sync, patch);
     persist();
   }
 
@@ -225,6 +244,7 @@
         if (!r.frames.length) throw new Error("No frames came back from the player.");
         addFrames(r.frames, burstNo);
       }
+      openPicker(draft.frames.find((f) => f.burst === burstNo && f.rank === 1)?.id);
     } catch (e) {
       say(e.message, "error");
     } finally {
@@ -243,6 +263,37 @@
     if (frame) toggleFrame(frame);
   }
 
+  function openPicker(id) {
+    if (!draft?.frames.length) return;
+    pickerHighlight = id ?? draft.frames.find((f) => f.selected)?.id ?? draft.frames[0].id;
+    pickerOpen = true;
+  }
+  function pickerOrder() {
+    return [...draft.frames].sort((a, b) => a.burst - b.burst || a.time - b.time);
+  }
+  function movePicker(step) {
+    const order = pickerOrder();
+    const i = order.findIndex((f) => f.id === pickerHighlight);
+    pickerHighlight = order[Math.max(0, Math.min(order.length - 1, i + step))].id;
+  }
+  function pickerKey(key) {
+    const order = draft ? pickerOrder() : [];
+    const current = order.find((f) => f.id === pickerHighlight);
+    switch (key) {
+      case "ArrowLeft": case ",": return movePicker(-1);
+      case "ArrowRight": case ".": return movePicker(1);
+      case " ": case "x": return current && toggleFrame(current);
+      case "Enter": case "Escape": pickerOpen = false; return;
+      case "c": pickerOpen = false; return complete();
+      case "m": return mark(false);
+    }
+    if (/^[1-9]$/.test(key)) {
+      const latest = Math.max(...order.map((f) => f.burst));
+      const f = order.find((x) => x.burst === latest && x.rank === Number(key));
+      if (f) { pickerHighlight = f.id; toggleFrame(f); }
+    }
+  }
+
   function complete() {
     if (!draft) return;
     if (!draft.frames.some((f) => f.selected)) return say("Select at least one still first.", "error");
@@ -255,6 +306,7 @@
     draft.frames.forEach((f) => URL.revokeObjectURL(f.url));
     draft = null;
     stage = "idle";
+    pickerOpen = false;
   }
 
   async function upload() {
@@ -267,13 +319,7 @@
     try {
       const stills = draft.frames.filter((f) => f.selected).sort((a, b) => a.time - b.time);
       const photos = stills.map((f, i) => ({ blob: f.blob, filename: `still-${i + 1}.jpg` }));
-      const crop_of = [];
-      for (const [i, f] of stills.entries()) {
-        if (f.position && f.crop) {
-          photos.push({ blob: await makeCrop(f, settings.crop_w, settings.crop_h), filename: `crop-${i + 1}.jpg` });
-          crop_of.push(i);
-        }
-      }
+      const crop_of = []; // detail crops come in v1.5 (SPEC §9.9)
       const t_vid = stills[0].time;
       const annotations = Object.entries(draft.annotations)
         .filter(([, v]) => v)
@@ -334,6 +380,7 @@
   // --- Keyboard (SPEC §13) --------------------------------------------------------------
   function handleKey(key, shift) {
     if (key.length === 1 && !["<", ">"].includes(key)) key = key.toLowerCase();
+    if (pickerOpen && draft) return pickerKey(key);
     if (stage === "annotating") {
       if (key === "Enter") return upload();
       if (key === "Escape") { stage = "capturing"; return; }
@@ -365,11 +412,12 @@
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = e.target?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    const handled = [" ", "k", "j", "l", "ArrowLeft", "ArrowRight", ",", ".", "<", ">", "n", "m", "c", "d", "a", "Escape", "Enter",
+    const handled = [" ", "k", "j", "l", "x", "ArrowLeft", "ArrowRight", ",", ".", "<", ">", "n", "m", "c", "d", "a", "Escape", "Enter",
                      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
     const key = e.key.length === 1 && !["<", ">"].includes(e.key) ? e.key.toLowerCase() : e.key;
     if (!handled.includes(key)) return;
-    if (key === "Enter" && stage !== "annotating") return;
+    if (key === "Enter" && stage !== "annotating" && !pickerOpen) return;
+    if (key === "x" && !pickerOpen) return;
     e.preventDefault();
     handleKey(e.key, e.shiftKey);
   }
@@ -382,12 +430,53 @@
     api.me().then((m) => (me = m)).catch((e) => (meError = e.status === 401 ? "No valid token yet." : e.message));
     api.terms().then((r) => (terms = r.terms)).catch(() => {});
     const last = loadLastVideo();
-    if (last) {
-      await loadVideo(last);
-      if (video?.dive && video.permission.granted) panel = null;
-    }
+    if (last) await loadVideo(last);
+    if (DEV_DEFAULTS.enabled) await applyDevDefaults();
+    if (setupComplete) panel = null;
   });
   onDestroy(() => { clearInterval(pollTimer); clearInterval(extTimer); grabber.destroy(); });
+
+  // Development only: synthetic bursts, for testing the picker without YouTube.
+  if (import.meta.env.DEV) {
+    window.__diveInat = {
+      async fakeBurst(count = 24) {
+        ensureDraft();
+        const burstNo = draft.nextBurst++;
+        const frames = [];
+        for (let i = 0; i < count; i++) {
+          const c = new OffscreenCanvas(1920, 1080);
+          const ctx = c.getContext("2d");
+          ctx.fillStyle = `hsl(${180 + i * 3}, 45%, 35%)`;
+          ctx.fillRect(0, 0, 1920, 1080);
+          ctx.filter = `blur(${Math.abs(i - count / 2) / 2}px)`;
+          ctx.fillStyle = "#f5d76e";
+          ctx.beginPath(); ctx.ellipse(700 + i * 20, 540, 160, 70, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.filter = "none";
+          ctx.fillStyle = "#fff"; ctx.font = "64px sans-serif"; ctx.fillText(`test frame ${i + 1}`, 60, 120);
+          frames.push({ time: currentTime + i / 24, width: 1920, height: 1080, sharpness: 100 - Math.abs(i - count / 2) * 4,
+                        blob: await c.convertToBlob({ type: "image/jpeg", quality: 0.8 }) });
+        }
+        addFrames(frames, burstNo);
+        openPicker(draft.frames.find((f) => f.burst === burstNo && f.rank === 1)?.id);
+      },
+    };
+  }
+
+  // TEMPORARY: fill in hard-coded values during development (lib/devDefaults.js).
+  async function applyDevDefaults() {
+    for (const [k, v] of Object.entries(DEV_DEFAULTS.settings)) if (!settings[k]) settings[k] = v;
+    saveSettings($state.snapshot(settings));
+    if (!video) await loadVideo(DEV_DEFAULTS.videoUrl);
+    if (!video.dive) {
+      try {
+        const blob = await (await fetch(DEV_DEFAULTS.diveFile)).blob();
+        const { dives } = await api.parseDive(new File([blob], "dive.ssrf"));
+        setDive(dives[0]);
+      } catch (e) { say(`Couldn't load the default dive: ${e.message}`, "error"); }
+    }
+    if (!video.permission.granted) video.permission = { ...DEV_DEFAULTS.permission };
+    persist();
+  }
 
   async function onToken(token) {
     try {
@@ -471,12 +560,12 @@
     <Timeline {duration} {currentTime} dive={video?.dive} {sync}
               syncPoints={{ descent: video?.dive?.descent_s != null && video?.dive ? (video.dive.descent_s - sync.b) / sync.a : null,
                             ascent: video?.dive?.ascent_s != null && video?.dive ? (video.dive.ascent_s - sync.b) / sync.a : null }}
-              reviewed={video?.reviewed || []} observations={video?.observations || []} onSeek={seek} {onDrag} />
+              reviewed={video?.reviewed || []} observations={video?.observations || []} onSeek={seek} {onDrag}
+              dragHint={anchorCount === 0 ? "moves it" : anchorCount === 1 ? "stretches it around the sync point" : "fixed by both sync points"} />
   </div>
 
   <aside class="right">
-    <ObservationPanel {draft} {stage} {busy} {terms} maxStills={MAX_STILLS}
-                      onToggle={toggleFrame} onPosition={(f, p) => { f.position = p; }} onCropToggle={(f) => (f.crop = !f.crop)}
+    <ObservationPanel {draft} {stage} {busy} {terms} maxStills={MAX_STILLS} onOpenPicker={openPicker}
                       onComplete={complete} onBack={() => (stage = "capturing")} onUpload={upload} onDiscard={() => discard()}
                       onAnnotation={(attr, value) => { draft.annotations[attr] = value; }} />
 
@@ -514,6 +603,13 @@ Annotations: {JSON.stringify(o.preview.annotations)}</pre></details>
   </aside>
 </main>
 
+{#if pickerOpen}
+  <FramePicker {draft} highlightId={pickerHighlight} maxStills={MAX_STILLS} {busy}
+               onHighlight={(id) => (pickerHighlight = id)} onToggle={toggleFrame}
+               onPosition={(f, p) => { f.position = p; }} onClose={() => (pickerOpen = false)}
+               onComplete={() => { pickerOpen = false; complete(); }} onMark={() => mark(false)} />
+{/if}
+
 {#if toast}<div class="toast {toast.kind}" role="status">{toast.message}</div>{/if}
 
 <style>
@@ -549,6 +645,6 @@ Annotations: {JSON.stringify(o.preview.annotations)}</pre></details>
   button.link { border: none; background: none; padding: 0; color: var(--accent); }
   .small { font-size: 12px; }
   .keys td { padding: 3px 10px 3px 0; font-size: 13px; }
-  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 6px; background: var(--text); color: var(--bg); max-width: min(90vw, 640px); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+  .toast { position: fixed; z-index: 60; bottom: 16px; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 6px; background: var(--text); color: var(--bg); max-width: min(90vw, 640px); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
   .toast.error { background: var(--danger); color: #fff; }
 </style>

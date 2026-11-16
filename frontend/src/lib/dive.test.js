@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addRange, clock, cropRect, interpolate, region, solveSync, syncFrom, videoIdFrom } from "./dive.js";
+import { addRange, clock, cropRect, dragSync, interpolate, region, solveSync, syncFrom, videoIdFrom } from "./dive.js";
 
 test("solveSync", () => {
   assert.deepEqual(solveSync([[5, 14]]), { a: 1, b: 9 });
@@ -9,9 +9,30 @@ test("solveSync", () => {
   assert.ok(Math.abs(a * 5 + b - 14) < 1e-9);
 });
 
-test("syncFrom adds drag offset", () => {
-  const s = syncFrom({ descentVid: 20, dragOffset: 3 }, { descent_s: 14, ascent_s: 6753 });
-  assert.deepEqual(s, { a: 1, b: -3 });
+const DIVE = { descent_s: 14, ascent_s: 6753 };
+
+test("syncFrom: offset with no anchors, pinned scale with one", () => {
+  assert.deepEqual(syncFrom({ dragOffset: 3 }, DIVE), { a: 1, b: 3 });
+  assert.deepEqual(syncFrom({ descentVid: 20, dragOffset: 3 }, DIVE), { a: 1, b: -6 });
+  const s = syncFrom({ descentVid: 20, scale: 1.01 }, DIVE);
+  assert.ok(Math.abs(s.a * 20 + s.b - 14) < 1e-9); // descent stays pinned
+});
+
+test("dragSync offsets with no anchors", () => {
+  assert.deepEqual(dragSync({ dragOffset: 0 }, DIVE, 100, 110), { dragOffset: -10 });
+});
+
+test("dragSync scales around the descent", () => {
+  const sync = { descentVid: 20 };
+  // Log time under the pointer at video 1020 is 1014; drag it to 1010.
+  const { scale } = dragSync(sync, DIVE, 1020, 1010);
+  const s = syncFrom({ ...sync, scale }, DIVE);
+  assert.ok(Math.abs(s.a * 1010 + s.b - 1014) < 1e-9);
+  assert.ok(Math.abs(s.a * 20 + s.b - 14) < 1e-9);
+});
+
+test("dragSync does nothing with both anchors", () => {
+  assert.equal(dragSync({ descentVid: 20, ascentVid: 6700 }, DIVE, 100, 110), null);
 });
 
 test("interpolate", () => {

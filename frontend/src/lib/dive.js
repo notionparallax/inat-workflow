@@ -14,13 +14,41 @@ export function solveSync(points) {
 export const videoToLog = (tVid, { a, b }) => a * tVid + b;
 export const logToVideo = (tLog, { a, b }) => (tLog - b) / a;
 
-/** Sync from the stored descent/ascent video times plus any drag offset. */
-export function syncFrom(sync, dive) {
+function anchorPoints(sync, dive) {
   const points = [];
   if (sync?.descentVid != null && dive?.descent_s != null) points.push([sync.descentVid, dive.descent_s]);
   if (sync?.ascentVid != null && dive?.ascent_s != null) points.push([sync.ascentVid, dive.ascent_s]);
-  const { a, b } = solveSync(points);
-  return { a, b: b + (sync?.dragOffset || 0) };
+  return points;
+}
+
+/** Sync from the stored state (SPEC §8.2):
+ *  - no anchors: a = 1, offset set by dragging;
+ *  - one anchor: pinned there, scale set by dragging;
+ *  - two anchors: fully determined. */
+export function syncFrom(sync, dive) {
+  const points = anchorPoints(sync, dive);
+  if (points.length === 2) return solveSync(points);
+  if (points.length === 1) {
+    const [[v, l]] = points;
+    const a = sync?.scale || 1;
+    return { a, b: l - a * v };
+  }
+  return { a: 1, b: sync?.dragOffset || 0 };
+}
+
+/** New sync fields after dragging the profile from video time `fromT` to
+ *  `toT`, or null if dragging can't change it (both anchors set). */
+export function dragSync(sync, dive, fromT, toT) {
+  const points = anchorPoints(sync, dive);
+  if (points.length === 2) return null;
+  const current = syncFrom(sync, dive);
+  if (points.length === 0) return { dragOffset: (sync?.dragOffset || 0) - current.a * (toT - fromT) };
+  // Stretch around the anchor so the log time under the pointer follows it.
+  const [[v, l]] = points;
+  if (Math.abs(toT - v) < 1 || Math.abs(fromT - v) < 1 || Math.sign(toT - v) !== Math.sign(fromT - v)) return null;
+  const logUnderPointer = current.a * fromT + current.b;
+  const scale = (logUnderPointer - l) / (toT - v);
+  return { scale: Math.min(1.5, Math.max(0.67, scale)) };
 }
 
 export function interpolate(samples, t, key) {
