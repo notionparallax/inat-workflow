@@ -94,6 +94,42 @@ The back end holds the iNat token, so the browser never sends it anywhere except
 
 **GIFs** are encoded in the browser (`gifenc`), so frames never travel to the back end until upload (decided 2026-11-16).
 
+### 5.1 Possible simplification: no back end (not decided)
+
+While the user pastes an iNat API token (§16), nothing in v1 strictly needs a server. The front end and the extension could do everything, and the tool would be a set of static files.
+
+**Why it's possible.** The iNat API allows calls from any web page. Checked 2026-11-17: pre-flight (CORS) requests to `api.inaturalist.org/v1/observations` and `/v1/observation_photos` return `Access-Control-Allow-Origin: *` and allow the `Authorization` header with GET, POST, PUT and DELETE. So the browser can create observations, upload photos, add annotations and add to projects directly.
+
+**Where each back end job would go:**
+
+| Back end job (v0.1.x) | In the browser |
+| --- | --- |
+| `.ssrf` parsing (`ssrf.py`, ≈200 lines, `ElementTree`) | `DOMParser`; a straight port |
+| Sync maths, interpolation, notes, chapters (`derive.py`, `notes.py`, `chapters.py`, ≈250 lines) | Plain JavaScript |
+| Time zone from GPS (`timezonefinder`) | A browser library such as `tz-lookup` or `browser-geo-tz` (some are coarser near borders) |
+| iNat client (`inat.py`, `httpx`) | `fetch`, plus a small throttle (≈1 request per second) and retry loop (§10) |
+| JPEG encoding, sharpness | Already done in the extension and browser |
+| Holding the token | Browser storage (see below) |
+
+**Gains:**
+
+- Hosted deployment (v2) becomes static hosting (e.g. GitHub Pages), with no server to run or pay for.
+- No Python environment to install; one less process to start.
+- Frames go straight from browser memory to iNat, with no trip through `localhost`.
+- Closer to the "Thin" principle (§2).
+
+**Costs:**
+
+- **Token exposure.** The token would live in browser storage and be sent only to iNat, rather than being held by a back end (§5). On the user's own machine the difference is small. On a hosted page, any cross-site scripting flaw could read the token; the 24-hour expiry limits the damage.
+- **Tests.** The Python tests (`backend/tests/test_backend.py`, ≈240 lines) would need porting to a JavaScript test runner.
+- **Rework.** The back end already works, and the first real upload (§18a) went through it.
+
+**Still to check before deciding:**
+
+- Whether iNat's OAuth token endpoint (`/oauth/token`) and `/users/api_token` also allow cross-origin calls. PKCE is designed for clients without a server, so v2 OAuth should work from the browser. If those endpoints block it, v2 needs only a small token-exchange function (e.g. serverless), not a full back end.
+
+**If adopted:** port `ssrf.py` and `derive.py` first, since they hold the most logic and have tests to check against. Then update §5, §16 and §17.
+
 ## 6. Inputs
 
 ### 6.1 YouTube video
@@ -488,6 +524,7 @@ Build note (v0.1.x): during development, `frontend/src/lib/devDefaults.js` fills
 5. Whether a "head-mounted camera" note is useful to the scientist.
 6. How YouTube plays a 24 fps source (whether it keeps 24 fps). The extension estimates the frame rate during playback.
 7. Why the sample video (`MRja6VhCmMs`) ends ≈2 minutes before the dive does (e.g. the camera stopping, or a missing final GoPro file chapter). Two-point sync isn't possible for it, so it's the test case for one-point sync plus dragging the profile (§8.2).
+8. Whether to drop the Python back end and run entirely in the browser (§5.1).
 
 ## 18a. Decisions log
 
