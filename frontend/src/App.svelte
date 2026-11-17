@@ -737,7 +737,7 @@ Annotations: {JSON.stringify(o.preview.annotations)}</pre></details>
   main { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; padding: 12px 16px; }
   @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
   .left { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .player-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; }
+  .player-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; max-height: 75vh; }
   .player-wrap :global(iframe), .player-wrap :global(#yt-player) { position: absolute; inset: 0; width: 100%; height: 100%; }
   .placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: #aaa; }
   .error-box { margin: 0; padding: 8px 10px; border: 1px solid var(--danger); color: var(--danger); border-radius: 6px; }
