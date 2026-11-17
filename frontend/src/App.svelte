@@ -727,7 +727,7 @@
           <div class="row {o.status}">
             <button class="link" onclick={() => seek(o.t_vid)}>#{o.n} · {clock(o.t_vid)}</button>
             <span class="status">{o.status}</span>
-            {#if o.url}<a href={o.url} target="_blank" rel="noreferrer">open on iNat</a>{/if}
+            {#if o.url}<a href={o.url} target="_blank" rel="noreferrer">open on iNaturalist</a>{/if}
             {#if o.status === "failed"}<button onclick={() => send(o.id)}>Retry</button>{/if}
             {#if o.status === "dry-run" && pendingUploads.has(o.id)}<button onclick={() => send(o.id, true)}>Upload for real</button>{/if}
             {#if o.error}<div class="err">{o.error}</div>{/if}
