@@ -332,6 +332,40 @@
     say(`GIF ${replaced ? "replaced" : "added"} (${(gif.bytes / 1024 / 1024).toFixed(1)} MB). It will be the observation's first photo.`);
   }
 
+  // Capture one more second of frames beyond either end of the picker's strip.
+  // New frames join the burst at that end, so they sort into place.
+  const EXTEND_S = 1;
+  async function extendFrames(side) {
+    if (!draft?.frames.length || busy) return;
+    const order = pickerOrder();
+    const edge = side === "before" ? order[0] : order[order.length - 1];
+    const args = { center: edge.time, before: side === "before" ? EXTEND_S : 0, after: side === "after" ? EXTEND_S : 0 };
+    let added = 0;
+    const take = (f) => {
+      if (draft.frames.some((x) => Math.abs(x.time - f.time) < 0.002)) return; // already have it (the edge frame)
+      addFrame(f, edge.burst);
+      if (++added === 1) pickerHighlight = draft.frames[draft.frames.length - 1].id;
+    };
+    busy = true;
+    try {
+      if (extension.found && supportsRecord()) {
+        await grabber.record({ ...args, mode: "jpeg", rate: settings.capture_rate || 1 }, take);
+      } else if (extension.found) {
+        (await grabber.burst({ ...args, fps: extension.fps || undefined })).frames.forEach(take);
+      } else if (import.meta.env.DEV) {
+        const n = 12, start = side === "before" ? edge.time - EXTEND_S : edge.time + EXTEND_S / n;
+        (await synthFrames(n, start, n / EXTEND_S)).forEach(take);
+      } else {
+        throw new Error("Capturing frames needs the frame grabber extension (see Setup).");
+      }
+      if (!added) say(`No more frames ${side === "before" ? "before" : "after"} this point in the video.`);
+    } catch (e) {
+      say(e.message, "error");
+    } finally {
+      busy = false;
+    }
+  }
+
   function toggleFrame(frame) {
     if (frame.selected) frame.selected = false;
     else if (draft.frames.filter((f) => f.selected).length >= MAX_STILLS) say(`Up to ${MAX_STILLS} stills per observation.`);
@@ -718,7 +752,7 @@ Annotations: {JSON.stringify(o.preview.annotations)}</pre></details>
                onPosition={(f, p) => { f.position = p; }} onCrop={(f, box) => { f.cropBox = box; }}
                onClose={() => (pickerOpen = false)} onComplete={() => { pickerOpen = false; complete(); }}
                {gifOpen} {captureGif} onOpenGif={() => (gifOpen = true)} onCloseGif={() => (gifOpen = false)}
-               onUseGif={useGif} onError={(m) => say(m, "error")} />
+               onUseGif={useGif} onExtend={extendFrames} onError={(m) => say(m, "error")} />
 {/if}
 
 {#if toast}<div class="toast {toast.kind}" role="status">{toast.message}</div>{/if}

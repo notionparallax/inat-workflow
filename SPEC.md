@@ -265,7 +265,7 @@ The tool shows a mismatch warning if the video's span after sync differs from th
 ### 9.1 Workflow (modal)
 
 1. Press **N** (new observation). The previous observation must be completed or discarded.
-2. Watch, and press **M** to mark. A burst is captured (§7.3) and opens in a **full-screen frame picker**: one frame shown as large as the screen allows, with every captured frame in a strip of thumbnails underneath (sharpness bar under each). Arrow keys or `,`/`.` move between frames; Space selects; `1`–`9` select the sharpest frames of the latest burst; `M` captures another burst without leaving; `Esc` closes. Frames are large enough to judge focus and camouflage.
+2. Watch, and press **M** to mark. A burst is captured (§7.3) and opens in a **full-screen frame picker**: one frame shown as large as the screen allows, with every captured frame in a strip of thumbnails underneath (sharpness bar under each). Arrow keys or `,`/`.` move between frames; Space selects; `1`–`9` select the sharpest frames of the latest burst; `M` captures another burst without leaving; `Esc` closes. Buttons at either end of the strip capture one more second of frames before the first frame or after the last. Frames are large enough to judge focus and camouflage.
 3. Select 1–4 stills from one or more bursts. All marks within one observation are assumed to be **the same organism**. A GIF can also be made from a stretch of video around any frame (§9.7).
 4. Optionally click the organism in the large view to record where it is in the frame (§9.8). Clicking an unselected frame selects it and marks the position in one step.
 5. Press **C** (complete). The annotation form appears; set values with clicks or keys, or leave them unset.

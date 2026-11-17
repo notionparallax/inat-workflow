@@ -52,6 +52,17 @@ await page.locator(".thumb:not(.selected) .sel").first().click();
 await page.screenshot({ path: path.join(out, "ui-picker.png") });
 const selected = await page.locator(".thumb.selected").count();
 
+// Extend the strip by a second either side.
+const before = await page.locator(".thumb").count();
+await page.getByRole("button", { name: /before/ }).click();
+await page.waitForFunction((n) => document.querySelectorAll(".thumb").length > n, before, { timeout: 30000 });
+await page.waitForSelector(".extend:not(:disabled)");
+await page.getByRole("button", { name: /after/ }).click();
+await page.waitForFunction((n) => document.querySelectorAll(".thumb").length > n + 12, before, { timeout: 30000 });
+await page.waitForSelector(".extend:not(:disabled)");
+const extended = { before, after: await page.locator(".thumb").count() };
+await page.screenshot({ path: path.join(out, "ui-extended.png") });
+
 // Make a GIF of the crop area around the current frame (synthetic frames in dev).
 await page.locator(".thumb.current .pick").click();
 await page.keyboard.press("g");
@@ -76,6 +87,6 @@ await page.locator(".row.dry-run summary").first().click();
 await page.screenshot({ path: path.join(out, "ui-after-upload.png"), fullPage: true });
 const preview = await page.locator(".row.dry-run pre").first().innerText();
 
-console.log(JSON.stringify({ drawerOpen, sync, cropLabel, selected, gifMs, gifInfo, gifReplaced, errors }, null, 2));
+console.log(JSON.stringify({ drawerOpen, sync, cropLabel, selected, extended, gifMs, gifInfo, gifReplaced, errors }, null, 2));
 console.log(preview);
 await browser.close();

@@ -7,7 +7,7 @@
   import GifMaker from "./GifMaker.svelte";
 
   let { draft, highlightId, maxStills = 4, busy = false, onHighlight, onToggle, onPosition, onCrop, onClose, onComplete,
-        gifOpen = false, captureGif, onOpenGif, onCloseGif, onUseGif, onError } = $props();
+        gifOpen = false, captureGif, onOpenGif, onCloseGif, onUseGif, onExtend, onError } = $props();
 
   const frames = $derived(draft ? [...draft.frames].sort((a, b) => a.burst - b.burst || a.time - b.time) : []);
   const current = $derived(frames.find((f) => f.id === highlightId) || frames[0]);
@@ -132,6 +132,8 @@
     {/if}
 
     <div class="strip" bind:this={stripEl}>
+      <button class="extend" onclick={() => onExtend("before")} disabled={busy}
+              title="Capture the second of video before the first frame">{busy ? "Capturing…" : "+1 s\nbefore"}</button>
       {#each frames as f (f.id)}
         <div class="thumb" class:current={f.id === current.id} class:selected={f.selected} data-id={f.id}>
           <button class="pick" onclick={() => onHighlight(f.id)} title="Burst {f.burst} · {f.time.toFixed(3)} s · sharpness {f.sharpness}">
@@ -145,6 +147,8 @@
           <span class="bar" style="width:{Math.min(100, (f.sharpness / Math.max(...frames.filter((x) => x.burst === f.burst).map((x) => x.sharpness))) * 100)}%"></span>
         </div>
       {/each}
+      <button class="extend" onclick={() => onExtend("after")} disabled={busy}
+              title="Capture the second of video after the last frame">{busy ? "Capturing…" : "+1 s\nafter"}</button>
     </div>
   </div>
 {/if}
@@ -176,6 +180,9 @@
   .rank { position: absolute; left: 4px; top: 4px; background: rgba(0,0,0,.7); color: #fff; font-size: 12px; padding: 0 5px; border-radius: 3px; pointer-events: none; }
   .sel { position: absolute; right: 4px; top: 4px; min-width: 26px; padding: 0 6px; font-size: 13px; line-height: 22px; border-radius: 4px; background: rgba(0,0,0,.65); color: #fff; border: 1px solid rgba(255,255,255,.5); }
   .thumb.selected .sel { background: #0b6e99; border-color: #0b6e99; }
+  .extend { flex: 0 0 auto; width: 76px; margin: 3px 0; white-space: pre-line; font-size: 13px; line-height: 1.3;
+            background: rgba(255,255,255,.08); border: 1px dashed rgba(255,255,255,.35); border-radius: 4px; }
+  .extend:not(:disabled):hover { border-color: #9fe0ff; color: #9fe0ff; }
   .bar { position: absolute; left: 0; bottom: 0; height: 4px; background: #5cc278; pointer-events: none; }
   button { color: inherit; }
   header button:not(.primary), .controls button:not(.primary) { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); }
