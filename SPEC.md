@@ -57,6 +57,7 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 - Hosted deployment (still no video storage or processing on the server).
 - Optional colour correction for underwater colour casts.
 - No-log mode for video without a dive log (e.g. non-divers): time from a manually entered start time, location set on iNat (as in §9.10), and no depth or temperature.
+- Optionally add a GPS trace, so if there's a GPS log, the time stamp can join the location with the image time stamp (this is prototyped in this repo: [notionparallax: dive-map](https://github.com/notionparallax/dive-map))
 
 ### Later / not decided
 
