@@ -21,12 +21,14 @@
   async function make() {
     try {
       busy = "Capturing frames…";
-      const prepared = await capture({ center: frame.time, before, after, fps, width, box: useCrop ? frame.cropBox : null },
+      // Plain copy: a reactive proxy can't be posted to the extension.
+      const box = useCrop && frame.cropBox ? { x: frame.cropBox.x, y: frame.cropBox.y, s: frame.cropBox.s } : null;
+      const prepared = await capture({ center: frame.time, before, after, fps, width, box },
                                      (n) => (busy = `Capturing frames… ${n} of ≈${frameCount}`));
       busy = "Encoding GIF…";
       const gif = await encodeGif(prepared, { fps });
       if (result) URL.revokeObjectURL(result.url);
-      result = { ...gif, url: URL.createObjectURL(gif.blob), start: frame.time - before, end: frame.time + after, cropped: useCrop };
+      result = { ...gif, url: URL.createObjectURL(gif.blob), start: frame.time - before, end: frame.time + after, cropped: !!box };
     } catch (e) {
       onError(e.message);
     } finally {
