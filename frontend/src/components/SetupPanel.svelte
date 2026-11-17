@@ -66,11 +66,11 @@
     {#if me}
       <p>Logged in as <strong>{me.login}</strong>{me.name ? ` (${me.name})` : ""}.
         {#if tokenLeft != null}<span class:warn={tokenLeft < 3600}>Token expires in {hours(tokenLeft)}.</span>{/if}</p>
-    {:else}
-      {#if meError}<p class="warn small">{meError}</p>{/if}
-      <p class="small">Get a token from <a href="https://www.inaturalist.org/users/api_token" target="_blank" rel="noreferrer">inaturalist.org/users/api_token</a>
-        (tokens last 24 hours) and paste it here.</p>
+    {:else if meError}
+      <p class="warn small">{meError}</p>
     {/if}
+    <p class="small">Get {me ? "a new" : "a"} token from <a href="https://www.inaturalist.org/users/api_token" target="_blank" rel="noreferrer">https://www.inaturalist.org/users/api_token</a>
+      (tokens last 24 hours) and paste it here.</p>
     <form onsubmit={(e) => { e.preventDefault(); onToken(tokenInput); tokenInput = ""; }}>
       <input placeholder="Paste API token" bind:value={tokenInput} />
       <button>{me ? "Replace" : "Save"}</button>
