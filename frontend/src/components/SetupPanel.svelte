@@ -82,6 +82,10 @@
     {#if extension.found}
       <p>Installed (v{extension.version}).
         {#if extension.height}Playing at {extension.width}×{extension.height}{extension.fps ? `, ≈${extension.fps} fps` : ""}.{/if}</p>
+      {#if extension.version && extension.version < "0.2.0"}
+        <p class="warn small">This is an old version, which captures slowly. Open <code>chrome://extensions</code>, click the reload
+          icon on “Dive iNat frame grabber”, then reload this page.</p>
+      {/if}
       {#if extension.height && extension.height < 2160}
         <p class="warn small">Not playing at 2160p. Choose the highest quality in the player's settings menu, or ask the player for it:</p>
       {/if}

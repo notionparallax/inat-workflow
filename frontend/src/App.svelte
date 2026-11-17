@@ -84,7 +84,11 @@
 
   const grabber = createGrabber({
     getIframe: () => player?.getIframe?.(),
-    onHello: (version) => { extension.found = true; extension.version = version; },
+    onHello: (version) => {
+      extension.found = true;
+      extension.version = version;
+      if (!supportsRecord()) say(`The frame grabber extension is out of date (v${version}), so capture is slow. Reload it in chrome://extensions, then reload this page.`, "error");
+    },
     onKey: (d) => handleKey(d.key, d.shiftKey),
   });
   extension.requestQuality = async () => {
