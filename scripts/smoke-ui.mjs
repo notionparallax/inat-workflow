@@ -57,11 +57,16 @@ await page.locator(".thumb.current .pick").click();
 await page.keyboard.press("g");
 const t0 = Date.now();
 await page.getByRole("button", { name: "Make GIF", exact: true }).click();
-await page.getByRole("button", { name: "Use this GIF" }).waitFor({ timeout: 60000 });
+await page.getByRole("button", { name: "Make again" }).waitFor({ timeout: 60000 });
 const gifMs = Date.now() - t0;
-const gifInfo = await page.locator(".gif .info p").innerText();
+const gifInfo = await page.locator(".gif .info p").first().innerText();
+const gifUrl1 = await page.locator(".gif .preview img").getAttribute("src");
 await page.screenshot({ path: path.join(out, "ui-gif.png") });
-await page.getByRole("button", { name: "Use this GIF" }).click();
+// Making it again replaces the observation's GIF.
+await page.getByRole("button", { name: "Make again" }).click();
+await page.waitForFunction((u) => { const i = document.querySelector(".gif .preview img"); return i && i.src !== u && !document.querySelector(".gif .opts button.primary:disabled"); }, gifUrl1, { timeout: 60000 });
+await page.getByRole("button", { name: "Done" }).click();
+const gifReplaced = (await page.evaluate(() => document.querySelector(".gifbox img")?.src)) !== gifUrl1;
 
 // Complete, then upload (dry run) and read back what would be sent.
 await page.keyboard.press("c");
@@ -71,6 +76,6 @@ await page.locator(".row.dry-run summary").first().click();
 await page.screenshot({ path: path.join(out, "ui-after-upload.png"), fullPage: true });
 const preview = await page.locator(".row.dry-run pre").first().innerText();
 
-console.log(JSON.stringify({ drawerOpen, sync, cropLabel, selected, gifMs, gifInfo, errors }, null, 2));
+console.log(JSON.stringify({ drawerOpen, sync, cropLabel, selected, gifMs, gifInfo, gifReplaced, errors }, null, 2));
 console.log(preview);
 await browser.close();

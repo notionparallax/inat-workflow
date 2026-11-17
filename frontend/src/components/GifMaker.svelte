@@ -13,11 +13,12 @@
   let width = $state(GIF_DEFAULTS.width);
   let useCrop = $state(!!frame?.cropBox);
   let busy = $state("");
-  let result = $state(null);
 
   const duration = $derived(before + after);
   const frameCount = $derived(Math.round(duration * fps) + 1);
 
+  // A finished GIF goes straight onto the observation (replacing any earlier
+  // one); the draft owns its object URL.
   async function make() {
     try {
       busy = "Capturing frames…";
@@ -27,17 +28,12 @@
                                      (n) => (busy = `Capturing frames… ${n} of ≈${frameCount}`));
       busy = "Encoding GIF…";
       const gif = await encodeGif(prepared, { fps });
-      if (result) URL.revokeObjectURL(result.url);
-      result = { ...gif, url: URL.createObjectURL(gif.blob), start: frame.time - before, end: frame.time + after, cropped: !!box };
+      onUse({ ...gif, url: URL.createObjectURL(gif.blob), start: frame.time - before, end: frame.time + after, cropped: !!box });
     } catch (e) {
       onError(e.message);
     } finally {
       busy = "";
     }
-  }
-  function use() {
-    onUse(result);
-    result = null; // ownership of the object URL passes to the draft
   }
   const mb = (n) => (n / 1024 / 1024).toFixed(1);
 </script>
@@ -61,19 +57,17 @@
       <input type="checkbox" bind:checked={useCrop} disabled={!frame.cropBox} /> Only the crop box area
     </label>
     <span class="muted">{duration.toFixed(1)} s · {frameCount} frames</span>
-    <button class="primary" onclick={make} disabled={!!busy || duration <= 0}>{busy || (result ? "Make again" : "Make GIF")}</button>
+    <button class="primary" onclick={make} disabled={!!busy || duration <= 0}>{busy || (existing ? "Make again" : "Make GIF")}</button>
   </div>
 
   <div class="preview">
-    {#if result}
-      <img src={result.url} alt="GIF preview" />
+    {#if existing}
+      {#key existing.url}<img src={existing.url} alt="This observation's GIF" />{/key}
       <div class="info">
-        <p>{result.width}×{result.height} · {result.frames} frames at {result.fps} fps · {mb(result.bytes)} MB{result.colors < 256 ? ` · reduced to ${result.colors} colours to fit 5 MB` : ""}</p>
-        <button class="primary" onclick={use}>{existing ? "Replace the observation's GIF" : "Use this GIF"}</button>
+        <p>This observation's GIF: {existing.width}×{existing.height} · {existing.frames} frames at {existing.fps} fps · {mb(existing.bytes)} MB{existing.colors < 256 ? ` · reduced to ${existing.colors} colours to fit 5 MB` : ""}{existing.cropped ? " · crop box area" : ""}</p>
+        <p class="muted">Making it again replaces it.</p>
+        <button class="primary" onclick={onClose}>Done</button>
       </div>
-    {:else if existing}
-      <img src={existing.url} alt="Current GIF" />
-      <div class="info"><p>This observation's GIF: {existing.width}×{existing.height}, {existing.frames} frames, {mb(existing.bytes)} MB.</p></div>
     {:else}
       <p class="muted">Choose the stretch of video either side of this frame, then make the GIF. Movement of the
         camera around the organism helps identifiers see its shape; 2–4 seconds is usually plenty.</p>

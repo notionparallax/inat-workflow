@@ -350,7 +350,7 @@ Made from the frame picker (`G`), around the frame being viewed:
 - The user sets how many seconds before and after the frame (default 1.5 s each, so 3 s), the frame rate (default 10 fps) and the width (default 800 px). Optionally the GIF shows only the frame's crop box area (§9.9), which keeps small subjects visible.
 - The extension steps through that stretch of video at the GIF frame rate (§7.3), so these frames are captured separately from the stills.
 - Encoded **in the browser** with `gifenc`, using one palette for the whole animation to avoid flicker. If the result is over ≈5 MB (larger GIFs often fail to upload to iNat), the tool reduces colours to 128, then 64, then shrinks the size, until it fits.
-- The real GIF is previewed before it's added. One GIF per observation, uploaded as the **first** photo, so it becomes the thumbnail. The notes say "Photo 1 is an animated GIF from the video."
+- A finished GIF is added to the observation straight away and previewed; making it again replaces it. One GIF per observation, uploaded as the **first** photo, so it becomes the thumbnail. The notes say "Photo 1 is an animated GIF from the video."
 - Risk: iNat staff have said animated GIFs were never officially supported and may be removed. The YouTube link in the notes is the fallback. iNat accepts JPEG, PNG and GIF only; WebP and video are not accepted.
 
 ### 9.8 Subject position in the frame

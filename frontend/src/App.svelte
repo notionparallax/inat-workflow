@@ -326,10 +326,10 @@
     return prepareFrames(blobs, width, box);
   }
   function useGif(gif) {
+    const replaced = !!draft.gif;
     if (draft.gif) URL.revokeObjectURL(draft.gif.url);
     draft.gif = gif;
-    gifOpen = false;
-    say(`GIF added (${(gif.bytes / 1024 / 1024).toFixed(1)} MB). It will be the observation's first photo.`);
+    say(`GIF ${replaced ? "replaced" : "added"} (${(gif.bytes / 1024 / 1024).toFixed(1)} MB). It will be the observation's first photo.`);
   }
 
   function toggleFrame(frame) {
