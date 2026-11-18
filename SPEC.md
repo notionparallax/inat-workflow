@@ -423,6 +423,8 @@ Known limitation: timestamps in notes and chapters assume the video never change
 
 ## 13. Keyboard shortcuts
 
+The complete list, grouped by task, lives in `frontend/src/lib/shortcuts.js`. It feeds both the Shortcuts panel and a printable A4 card (`shortcuts.html`), so they stay in step. The table below is the summary.
+
 The page re-implements YouTube's standard shortcuts (keys pressed inside the iframe go to YouTube, so focus is kept on the page), and adds its own. Playback commands go through the IFrame API; frame stepping goes through the extension, which can seek exactly.
 
 | Key                         | Action                                                      |

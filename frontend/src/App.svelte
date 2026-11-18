@@ -8,6 +8,7 @@
   import FramePicker from "./components/FramePicker.svelte";
   import IntroModal from "./components/IntroModal.svelte";
   import { DEV_DEFAULTS } from "./lib/devDefaults.js";
+  import { keysHtml, SHORTCUT_GROUPS } from "./lib/shortcuts.js";
   import { api } from "./lib/api.js";
   import { createGrabber } from "./lib/grabber.js";
   import { loadYouTubeApi, PLAYER_ERRORS } from "./lib/youtube.js";
@@ -671,19 +672,17 @@
     {:else if panel === "chapters"}
       {#if video}<ChaptersPanel {video} {settings} {me} />{:else}<p>Load a video first.</p>{/if}
     {:else if panel === "help"}
-      <table class="keys">
-        <tbody>
-          <tr><td><kbd>Space</kbd> / <kbd>K</kbd></td><td>Play / pause</td><td><kbd>N</kbd></td><td>New observation</td></tr>
-          <tr><td><kbd>J</kbd> / <kbd>L</kbd></td><td>Back / forward 10 s</td><td><kbd>M</kbd></td><td>Mark: capture a burst of frames</td></tr>
-          <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Back / forward 5 s</td><td><kbd>Shift</kbd>+<kbd>M</kbd></td><td>Capture the current frame only</td></tr>
-          <tr><td><kbd>,</kbd> / <kbd>.</kbd></td><td>Back / forward one frame</td><td><kbd>1</kbd>–<kbd>9</kbd></td><td>Select the numbered frames (while capturing)</td></tr>
-          <tr><td><kbd>&lt;</kbd> / <kbd>&gt;</kbd></td><td>Slower / faster</td><td><kbd>C</kbd></td><td>Complete → annotations</td></tr>
-          <tr><td><kbd>0</kbd>–<kbd>9</kbd></td><td>Jump to 0–90 % (when not capturing)</td><td><kbd>Enter</kbd></td><td>Upload (from annotations)</td></tr>
-          <tr><td><kbd>D</kbd> / <kbd>S</kbd></td><td>Set descent / surface sync point</td><td><kbd>Esc</kbd></td><td>Back / discard</td></tr>
-          <tr><td colspan="2"></td><td><kbd>R</kbd> / <kbd>G</kbd></td><td>Crop box / make GIF (in the frame picker)</td></tr>
-        </tbody>
-      </table>
-      <p class="muted">Shortcuts also work while the player has focus, if the extension is installed.</p>
+      <div class="keys">
+        {#each SHORTCUT_GROUPS as g}
+          <section>
+            <h4>{g.title}</h4>
+            <table><tbody>
+              {#each g.rows as [keys, action, kind]}<tr><th>{@html keysHtml(keys, kind)}</th><td>{action}</td></tr>{/each}
+            </tbody></table>
+          </section>
+        {/each}
+      </div>
+      <p class="muted">Shortcuts also work while the player has focus, if the extension is installed. <a href="shortcuts.html" target="_blank">Printable card</a></p>
     {/if}
   </div>
 {/if}
@@ -803,7 +802,13 @@ Annotations: {JSON.stringify(o.preview.annotations)}</pre></details>
   .row pre { white-space: pre-wrap; font-size: 11px; font-family: var(--mono); background: var(--bg); padding: 6px; border-radius: 4px; }
   button.link { border: none; background: none; padding: 0; color: var(--accent); }
   .small { font-size: 12px; }
-  .keys td { padding: 3px 10px 3px 0; font-size: 13px; }
+  .keys { columns: 3 300px; column-gap: 28px; }
+  .keys section { break-inside: avoid; margin-bottom: 10px; }
+  .keys h4 { margin: 0 0 4px; font-size: 13px; color: var(--accent); }
+  .keys table { border-collapse: collapse; }
+  .keys th { text-align: left; font-weight: normal; white-space: nowrap; padding: 2px 12px 2px 0; vertical-align: top; }
+  .keys td { padding: 2px 0; font-size: 13px; }
+  .keys :global(em) { color: var(--muted); }
   .toast { position: fixed; z-index: 60; bottom: 16px; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 6px; background: var(--text); color: var(--bg); max-width: min(90vw, 640px); box-shadow: 0 4px 16px rgba(0,0,0,.25); }
   .toast.error { background: var(--danger); color: #fff; }
 </style>

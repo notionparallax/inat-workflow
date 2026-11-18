@@ -41,5 +41,6 @@ export default defineConfig({
   // Relative asset paths, so the site works from any folder (e.g. GitHub Pages' /inat-workflow/).
   base: "./",
   plugins: [svelte(), zipPlugin],
+  build: { rollupOptions: { input: { main: "index.html", shortcuts: "shortcuts.html" } } },
   server: { port: 5173, strictPort: true },
 });
