@@ -6,6 +6,7 @@
   import SettingsPanel from "./components/SettingsPanel.svelte";
   import ChaptersPanel from "./components/ChaptersPanel.svelte";
   import FramePicker from "./components/FramePicker.svelte";
+  import IntroModal from "./components/IntroModal.svelte";
   import { DEV_DEFAULTS } from "./lib/devDefaults.js";
   import { api } from "./lib/api.js";
   import { createGrabber } from "./lib/grabber.js";
@@ -37,6 +38,12 @@
   let pickerOpen = $state(false);
   let pickerHighlight = $state(null);
   let gifOpen = $state(false);
+  const INTRO_KEY = "dive-inat:intro-seen";
+  let introOpen = $state((() => { try { return !localStorage.getItem(INTRO_KEY); } catch { return true; } })());
+  function closeIntro() {
+    introOpen = false;
+    try { localStorage.setItem(INTRO_KEY, "1"); } catch { /* blocked */ }
+  }
 
   let player = null;
   let lastPollT = null;
@@ -214,7 +221,7 @@
     video.sync.dragOffset = 0;
     video.sync.scale = 1;
     persist();
-    say(`${which === "descent" ? "Descent" : "Ascent"} set at ${clock(video.sync[`${which}Vid`])}.`);
+    say(`${which === "descent" ? "Descent" : "Surface"} set at ${clock(video.sync[`${which}Vid`])}.`);
   }
   let dragWarned = false;
   function onDrag(fromT, toT) {
@@ -531,7 +538,7 @@
       case "m": return mark(shift);
       case "c": return complete();
       case "d": return setAnchor("descent");
-      case "a": return setAnchor("ascent");
+      case "s": case "a": return setAnchor("ascent");
       case "Escape": return draft ? discard() : undefined;
     }
     if (/^[0-9]$/.test(key)) {
@@ -541,7 +548,7 @@
   }
 
   function onKeydown(e) {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (introOpen || e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = e.target?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
     const handled = [" ", "k", "j", "l", "x", "r", "g", "ArrowLeft", "ArrowRight", ",", ".", "<", ">", "n", "m", "c", "d", "a", "Escape", "Enter",
@@ -564,7 +571,7 @@
     api.terms().then((r) => (terms = r.terms)).catch(() => {});
     const last = loadLastVideo();
     if (last) await loadVideo(last);
-    if (DEV_DEFAULTS.enabled) await applyDevDefaults();
+    if (import.meta.env.DEV && DEV_DEFAULTS.enabled) await applyDevDefaults();
     if (setupComplete) panel = null;
   });
   onDestroy(() => { clearInterval(pollTimer); clearInterval(extTimer); grabber.destroy(); });
@@ -608,8 +615,8 @@
     if (!video) await loadVideo(DEV_DEFAULTS.videoUrl);
     if (!video.dive) {
       try {
-        const blob = await (await fetch(DEV_DEFAULTS.diveFile)).blob();
-        const { dives } = await api.parseDive(new File([blob], "dive.ssrf"));
+        const { default: text } = await import("../test/fixtures/gordons_dive.ssrf?raw");
+        const { dives } = await api.parseDive(new File([text], "dive.ssrf"));
         setDive(dives[0]);
       } catch (e) { say(`Couldn't load the default dive: ${e.message}`, "error"); }
     }
@@ -631,6 +638,8 @@
 
 <svelte:window onkeydown={onKeydown} />
 
+{#if introOpen}<IntroModal {extension} onClose={closeIntro} />{/if}
+
 <header class="top">
   <h1>Dive iNat</h1>
   <div class="chips">
@@ -645,6 +654,7 @@
     {#each [["setup", "Setup"], ["settings", "Settings"], ["chapters", "Chapters"], ["help", "Shortcuts"]] as [key, label]}
       <button class:active={panel === key} onclick={() => (panel = panel === key ? null : key)}>{label}</button>
     {/each}
+    <button onclick={() => (introOpen = true)}>About</button>
   </nav>
 </header>
 
@@ -669,7 +679,7 @@
           <tr><td><kbd>,</kbd> / <kbd>.</kbd></td><td>Back / forward one frame</td><td><kbd>1</kbd>–<kbd>9</kbd></td><td>Select the numbered frames (while capturing)</td></tr>
           <tr><td><kbd>&lt;</kbd> / <kbd>&gt;</kbd></td><td>Slower / faster</td><td><kbd>C</kbd></td><td>Complete → annotations</td></tr>
           <tr><td><kbd>0</kbd>–<kbd>9</kbd></td><td>Jump to 0–90 % (when not capturing)</td><td><kbd>Enter</kbd></td><td>Upload (from annotations)</td></tr>
-          <tr><td><kbd>D</kbd> / <kbd>A</kbd></td><td>Set descent / ascent sync point</td><td><kbd>Esc</kbd></td><td>Back / discard</td></tr>
+          <tr><td><kbd>D</kbd> / <kbd>S</kbd></td><td>Set descent / surface sync point</td><td><kbd>Esc</kbd></td><td>Back / discard</td></tr>
           <tr><td colspan="2"></td><td><kbd>R</kbd> / <kbd>G</kbd></td><td>Crop box / make GIF (in the frame picker)</td></tr>
         </tbody>
       </table>
@@ -696,8 +706,10 @@
       {#if draft && !pickerOpen}<span class="open-obs">Observation {draft.n} open: <kbd>M</kbd> adds frames · <kbd>C</kbd> completes</span>{/if}
       <span class="spacer"></span>
       <button onclick={() => mark(false)} disabled={busy || !video}>Mark <kbd>M</kbd></button>
-      <button onclick={() => setAnchor("descent")} disabled={!video?.dive}>Descent here <kbd>D</kbd></button>
-      <button onclick={() => setAnchor("ascent")} disabled={!video?.dive}>Ascent here <kbd>A</kbd></button>
+      <button onclick={() => setAnchor("descent")} disabled={!video?.dive}
+              title="The frame where your computer goes deeper than {video?.dive?.threshold_m ?? 1} m">Descent here <kbd>D</kbd></button>
+      <button onclick={() => setAnchor("ascent")} disabled={!video?.dive}
+              title="The frame where your computer comes shallower than {video?.dive?.threshold_m ?? 1} m for the last time">Surface here <kbd>S</kbd></button>
     </div>
     <Timeline {duration} {currentTime} dive={video?.dive} {sync}
               syncPoints={{ descent: video?.dive?.descent_s != null && video?.dive ? (video.dive.descent_s - sync.b) / sync.a : null,

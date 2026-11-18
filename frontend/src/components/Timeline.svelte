@@ -74,7 +74,7 @@
     {/if}
     {#if syncPoints.ascent != null}
       <g class="anchor" transform="translate({x(syncPoints.ascent)},0)">
-        <line y1="10" y2={H} /><text y={H - 4} x="-3" text-anchor="end">ascent</text>
+        <line y1="10" y2={H} /><text y={H - 4} x="-3" text-anchor="end">surface</text>
       </g>
     {/if}
 

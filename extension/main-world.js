@@ -2,7 +2,8 @@
 // player for a playback quality. Unofficial player API: best effort only.
 (() => {
   "use strict";
-  const allowed = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+  // Same pages as ALLOWED_PARENTS in grabber.js.
+  const allowed = /^(https:\/\/notionparallax\.github\.io|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/;
   const parent = location.ancestorOrigins && location.ancestorOrigins[0];
   if (!parent || !allowed.test(parent)) return;
 

@@ -16,3 +16,4 @@ dist/
 # Test output
 scripts/output/
 test-results/
+gordons_dive.ssrf

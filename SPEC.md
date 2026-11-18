@@ -30,9 +30,10 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 
 ## 4. Scope by phase
 
-### Version 1 (local, single user)
+### Version 1 (static site, soft launch)
 
-- Runs on the user's computer: a Svelte front end and a Python back end on `localhost`, plus the frame grabber extension (§7.2) loaded unpacked in Chrome or Edge.
+- A static Svelte site with no back end (§5), hosted on GitHub Pages at `notionparallax.github.io/inat-workflow`, plus the frame grabber extension (§7.2) in Chrome or Edge. Until the extension is in the Chrome Web Store, users load it unpacked from a zip the site offers.
+- A first-visit introduction that explains the tool and how to install the extension.
 - Inputs: a YouTube URL, a Subsurface `.ssrf` file containing a single dive, and a pasted iNat API token.
 - Manual video ↔ log sync (two-point click, or dragging the profile along the timeline).
 - Depth profile under the video timeline, clickable to jump the video.
@@ -54,7 +55,6 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 ### Version 2
 
 - OAuth login with iNaturalist (app registered under the author's account).
-- Hosted deployment (still no video storage or processing on the server).
 - Optional colour correction for underwater colour casts.
 - No-log mode for video without a dive log (e.g. non-divers): time from a manually entered start time, location set on iNat (as in §9.10), and no depth or temperature.
 - Optionally add a GPS trace, so if there's a GPS log, the time stamp can join the location with the image time stamp (this is prototyped in this repo: [notionparallax: dive-map](https://github.com/notionparallax/dive-map))
@@ -71,64 +71,37 @@ Initial users: the author and one marine scientist. Target users: anyone who wan
 ## 5. System overview
 
 ```txt
-┌──────────────────────── Browser (Svelte)   ────────────────────────┐
+┌──────────────────────── Browser (Svelte, static files) ────────────┐
 │  YouTube IFrame player    │  Filmstrip / observation form          │
 │  Timeline + depth profile │  Settings, permission, token           │
+│  .ssrf parser, sync maths, time zone from GPS, notes, chapters     │
+│  iNat client (fetch, throttling, retry)                            │
 │        ▲ frames + media times (postMessage)                        │
 │  ┌─────┴──────────────────────┐                                    │
 │  │ Frame grabber extension    │  runs inside the YouTube embed     │
 │  │ (content script, §7)       │  frame only                        │
-│  └────────────────────────────┘   frames → memory / IndexedDB      │
+│  └────────────────────────────┘   frames → memory                  │
 └───────────────┬────────────────────────────────────────────────────┘
-                │ HTTP (localhost)
-┌───────────────▼──────── Python back end (FastAPI) ─────────────────┐
-│  .ssrf parser       │                      │  iNat client          │
-│  sync maths         │  JPEG encoding       │  (pyinaturalist,      │
-│  time zone from GPS │                      │   throttling, retry)  │
-└────────────────────────────────────────────────────────────────────┘
-                │ HTTPS
+                │ HTTPS (direct; the API allows cross-origin calls)
           api.inaturalist.org
 ```
 
-The back end holds the iNat token, so the browser never sends it anywhere except `localhost`. Once the tool is hosted (v2), the same back end does the OAuth token exchange.
+There is no back end (decided 2026-11-18). The site is a set of static files, so hosting is free and there's no server to run. Frames, GIFs and the dive log stay in the browser until they're uploaded straight to iNaturalist.
 
-**GIFs** are encoded in the browser (`gifenc`), so frames never travel to the back end until upload (decided 2026-11-16).
+**Why it works.** The iNat API allows calls from any web page. Checked 2026-11-17 and again 2026-11-18: pre-flight (CORS) requests to `api.inaturalist.org/v1/observations` and `/v1/observation_photos` return `Access-Control-Allow-Origin: *` and allow the `Authorization` header with GET, POST, PUT and DELETE.
 
-### 5.1 Possible simplification: no back end (not decided)
+**Where the old Python back end's jobs went** (v0.1.x → v0.2):
 
-While the user pastes an iNat API token (§16), nothing in v1 strictly needs a server. The front end and the extension could do everything, and the tool would be a set of static files.
-
-**Why it's possible.** The iNat API allows calls from any web page. Checked 2026-11-17: pre-flight (CORS) requests to `api.inaturalist.org/v1/observations` and `/v1/observation_photos` return `Access-Control-Allow-Origin: *` and allow the `Authorization` header with GET, POST, PUT and DELETE. So the browser can create observations, upload photos, add annotations and add to projects directly.
-
-**Where each back end job would go:**
-
-| Back end job (v0.1.x) | In the browser |
+| Job | In the browser (`frontend/src/lib/`) |
 | --- | --- |
-| `.ssrf` parsing (`ssrf.py`, ≈200 lines, `ElementTree`) | `DOMParser`; a straight port |
-| Sync maths, interpolation, notes, chapters (`derive.py`, `notes.py`, `chapters.py`, ≈250 lines) | Plain JavaScript |
-| Time zone from GPS (`timezonefinder`) | A browser library such as `tz-lookup` or `browser-geo-tz` (some are coarser near borders) |
-| iNat client (`inat.py`, `httpx`) | `fetch`, plus a small throttle (≈1 request per second) and retry loop (§10) |
-| JPEG encoding, sharpness | Already done in the extension and browser |
-| Holding the token | Browser storage (see below) |
+| `.ssrf` parsing | `ssrf.js`, using `DOMParser`. Gives identical output to the Python parser on the sample dive. |
+| Sync maths, interpolation | `dive.js` |
+| Notes, chapters | `notes.js`, `chapters.js` |
+| Time zone from GPS | `@photostructure/tz-lookup` (offline, ≈70 kB; can be coarse within a few km of a border), with the UTC offset from `Intl` |
+| iNat client | `inat.js`: `fetch`, one request at a time, ≈1 per second, retries on 429 and 5xx (§10) |
+| Holding the token | `localStorage` in the user's browser, cleared when it expires |
 
-**Gains:**
-
-- Hosted deployment (v2) becomes static hosting (e.g. GitHub Pages), with no server to run or pay for.
-- No Python environment to install; one less process to start.
-- Frames go straight from browser memory to iNat, with no trip through `localhost`.
-- Closer to the "Thin" principle (§2).
-
-**Costs:**
-
-- **Token exposure.** The token would live in browser storage and be sent only to iNat, rather than being held by a back end (§5). On the user's own machine the difference is small. On a hosted page, any cross-site scripting flaw could read the token; the 24-hour expiry limits the damage.
-- **Tests.** The Python tests (`backend/tests/test_backend.py`, ≈240 lines) would need porting to a JavaScript test runner.
-- **Rework.** The back end already works, and the first real upload (§18a) went through it.
-
-**Still to check before deciding:**
-
-- Whether iNat's OAuth token endpoint (`/oauth/token`) and `/users/api_token` also allow cross-origin calls. PKCE is designed for clients without a server, so v2 OAuth should work from the browser. If those endpoints block it, v2 needs only a small token-exchange function (e.g. serverless), not a full back end.
-
-**If adopted:** port `ssrf.py` and `derive.py` first, since they hold the most logic and have tests to check against. Then update §5, §16 and §17.
+**Token exposure.** The token lives in browser storage and is sent only to iNat. Any cross-site scripting flaw on the site could read it; the 24-hour expiry limits the damage. The site loads no third-party scripts other than the YouTube player API.
 
 ## 6. Inputs
 
@@ -163,7 +136,7 @@ Findings from the sample:
 - **Two positions.** The dive computer's start location and the Subsurface dive site's position differ by ≈43 m. The parser prefers the computer's start location, because it's recorded for this specific dive, and falls back to the site position. Start and end locations are also the basis for drift dives later (§4).
 - **Temperature.** Only one temperature value was written for the whole dive (20.0 °C), probably because the Perdix records whole degrees and the water didn't change by a full degree. So the temperature is coarse, and the notes should give it to whole degrees.
 - **No compass data** is stored.
-- **Start and end of the dive.** The first sample (0:10) is at 0.0 m, and samples continue at 0.0 m for over a minute after surfacing (112:40–114:00). The descent and ascent anchors for sync (§8.2) are the first and last samples deeper than a threshold (default 1 m), not the first and last samples.
+- **Start and end of the dive.** The first sample (0:10) is at 0.0 m, and samples continue at 0.0 m for over a minute after surfacing (112:40–114:00). The descent and surface anchors for sync (§8.2) are where the depth first crosses below and last crosses above a threshold (default 1 m), interpolated between samples, not the first and last samples. Using the *last* crossing means a slow finish that hovers near the threshold anchors on the final time the computer comes up past it. Many computers jump straight from ≈1.4 m to 0.0 m between samples, so the surface anchor is only as precise as the sample interval.
 - **One dive per file** is expected. If a file contains several dives or several dive computers, the tool asks which to use.
 
 A dive with no GPS fix is still accepted (§9.10).
@@ -198,9 +171,9 @@ The web page remains the app. A small companion browser extension (the "frame gr
 - **Messaging.** The page and extension talk with `postMessage`, restricted to the tool's origin. The page sends commands (`grab`, `burst`, `step`, `status`), and the extension returns frames as transferable `ImageBitmap`s or JPEG blobs, each with its media time.
 - **Status.** The page detects whether the extension is present and shows a clear install prompt if not. It also reports the resolution actually being played, and warns if it's below the source (e.g. playing 1080p of a 4K upload). The player keeps its normal controls so the user can choose 2160p in the quality menu.
 - **Size.** Roughly 100–200 lines plus a manifest, with no settings, network access or storage of its own.
-- **Trusted origins.** `localhost` in v1. Once a domain is registered for the hosted tool, that domain is added. No other page can talk to the extension.
+- **Trusted origins.** `https://notionparallax.github.io` (the hosted site) and `localhost` (development). A custom domain later means a new extension version. No other page can talk to the extension.
 - **Browsers.** Chrome only (Manifest V3; Edge also runs it). A Firefox port is mostly the same code if it's wanted later.
-- **Distribution.** v1: loaded unpacked in developer mode by the two initial users. Later: published on the Chrome Web Store (one-off developer fee, review). Google bars extensions that download YouTube videos. This one copies frames from a video that's already playing, in the same way as many screenshot extensions already on the store, but the listing should say so plainly.
+- **Distribution.** Soft launch: the site offers the extension as a zip (built from `extension/` by `npm run build`) to load unpacked. Next: published on the Chrome Web Store (one-off developer fee, review). Google bars extensions that download YouTube videos. This one copies frames from a video that's already playing, in the same way as many screenshot extensions already on the store, but the listing should say so plainly.
 
 ### 7.3 Burst capture and sharpness ranking
 
@@ -241,7 +214,7 @@ where *b* is the offset, and *a* is a drift factor, defaulting to 1.
 
 ### 8.2 Setting sync
 
-- **Two-point (preferred):** the user clicks the video frame where the descent begins and the frame where they surface. These are matched to the log's descent and ascent anchors (§6.2). Two points give both *a* and *b*.
+- **Two-point (preferred):** the user clicks the video frame where the descent begins and the frame where they surface. These are matched to the log's descent and surface anchors (§6.2). Two points give both *a* and *b*.
 - **One-point:** descent only; *a* = 1.
 - **Drag:** if the video starts or ends mid-dive, the user drags the depth profile along the timeline until features line up (e.g. a stop, a sharp descent). What dragging does depends on how many sync points are set:
   - none: it shifts the whole profile (offset *b*, with *a* = 1);
@@ -468,7 +441,7 @@ The page re-implements YouTube's standard shortcuts (keys pressed inside the ifr
 | **C**                       | Complete observation → annotation form                      |
 | Enter                       | Confirm and upload                                          |
 | Esc                         | Cancel the current step / discard draft (with confirmation) |
-| D / A                       | Set descent / ascent sync point at the current frame        |
+| D / S                       | Set descent / surface sync point at the current frame       |
 
 ## 14. Interface layout
 
@@ -481,7 +454,7 @@ The page re-implements YouTube's standard shortcuts (keys pressed inside the ifr
 ├──────────────────────────────────────────────┤  [Complete]           │
 │  timeline: ▮reviewed ▮  ● ● ●  (markers)     ├──────────────────────┤
 │  depth profile  ╲__/‾‾╲____/‾‾‾╲___╱         │  Dive: Site, date     │
-│  sync: descent ▲        ascent ▲              │  Depth 12.4 m 18 °C   │
+│  sync: descent ▲       surface ▲              │  Depth 12.4 m 18 °C   │
 └──────────────────────────────────────────────┴──────────────────────┘
 ```
 
@@ -507,10 +480,10 @@ Build note (v0.1.x): during development, `frontend/src/lib/devDefaults.js` fills
 |------------------|---------------------------------------------|
 | Front end        | Svelte (SvelteKit or Vite)                  |
 | Frame grabber    | Browser extension, Manifest V3, plain JS/TS |
-| Back end         | Python, FastAPI                             |
-| iNat client      | pyinaturalist                               |
-| Log parsing      | Python XML parser for `.ssrf`               |
-| Time zone lookup | `timezonefinder` (offline)                  |
+| Back end         | None: static files on GitHub Pages          |
+| iNat client      | `fetch`, in the browser                     |
+| Log parsing      | `DOMParser`, in the browser                 |
+| Time zone lookup | `@photostructure/tz-lookup` (offline)       |
 | Sharpness        | Variance of the Laplacian (OpenCV or NumPy) |
 | GIF              | gifenc, in the browser                      |
 | Licence          | MIT                                         |
@@ -524,7 +497,6 @@ Build note (v0.1.x): during development, `frontend/src/lib/devDefaults.js` fills
 5. Whether a "head-mounted camera" note is useful to the scientist.
 6. How YouTube plays a 24 fps source (whether it keeps 24 fps). The extension estimates the frame rate during playback.
 7. Why the sample video (`MRja6VhCmMs`) ends ≈2 minutes before the dive does (e.g. the camera stopping, or a missing final GoPro file chapter). Two-point sync isn't possible for it, so it's the test case for one-point sync plus dragging the profile (§8.2).
-8. Whether to drop the Python back end and run entirely in the browser (§5.1).
 
 ## 18a. Decisions log
 
@@ -535,7 +507,8 @@ Resolved questions, kept here so the reasoning isn't lost:
 | How a capturer who isn't the diver gets the dive log | The diver sends them the `.ssrf` file. The tool doesn't handle this. |
 | EXIF metadata in uploaded photos | Not embedded. iNat strips EXIF from stored image files (it shows it on the photo page instead), so it wouldn't survive a later download. Embedded GPS would also be shown on the photo page even when iNat obscures the observation's location for a sensitive species. Date, time and location go through the API fields only. Downloaded frame bundles (v1.5) may carry EXIF, since they stay with the user. |
 | Videos trimmed or replaced after upload | Accepted as a known limitation. Links and chapters will point to the wrong moment, and the tool won't try to detect it. |
-| Origins the extension trusts | `localhost` for v1, plus a registered domain for the hosted tool. |
+| Origins the extension trusts | `notionparallax.github.io` for the hosted site, plus `localhost` for development. |
+| Back end | None. Everything runs in the browser and the site is hosted as static files (§5). Decided 2026-11-18 for the soft launch. |
 | Browsers | Chrome (and Edge, which runs Chrome extensions) only for now. |
 | Observation fields | Depth: 558 "Depth (m)". Water temperature: 14913 "Water temperature (in °C)". Both numeric (§9.4). |
 | Paper | About the data, not the tool (§19). |

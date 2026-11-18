@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dive iNat privacy</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <style>
+    :root { --bg: #f4f6f8; --text: #17212b; --muted: #5d6b78; --accent: #0b6e99; color-scheme: light; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0f151b; --text: #e3e9ee; --muted: #93a2b0; --accent: #4fb3dd; color-scheme: dark; } }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, "Segoe UI", sans-serif; }
+    main { max-width: 680px; margin: 0 auto; padding: 32px 16px 64px; }
+    a { color: var(--accent); }
+    h1 { font-size: 26px; margin-bottom: 4px; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Privacy</h1>
+  <p class="muted">Dive iNat and the Dive iNat frame grabber extension. Last updated 18 November 2026.</p>
+
+  <h2>The short version</h2>
+  <p>Dive iNat has no server and no accounts of its own. It collects nothing. Everything happens in your browser, and the
+    only places your data goes are YouTube (to play the video) and iNaturalist (when you choose to upload).</p>
+
+  <h2>The website</h2>
+  <ul>
+    <li><strong>Your iNaturalist API token</strong> is kept in your browser's local storage and sent only to
+      <code>api.inaturalist.org</code>. It expires after 24 hours.</li>
+    <li><strong>Your dive log</strong> is read in your browser. The parts the tool uses (times, depths, temperatures,
+      GPS position, site name) are kept in local storage with your work on that video, and sent to iNaturalist only as part
+      of observations you upload.</li>
+    <li><strong>Frames and GIFs</strong> are held in memory and uploaded straight to iNaturalist when you upload an observation.</li>
+    <li><strong>Settings and progress</strong> (markers, reviewed sections, sync) stay in local storage. Clear the site's data in
+      your browser to remove them.</li>
+    <li>There are no analytics, cookies or tracking scripts. The page loads the YouTube player, which is covered by
+      <a href="https://policies.google.com/privacy">Google's privacy policy</a>. The site is hosted on GitHub Pages, which
+      keeps standard server logs (see <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>).</li>
+  </ul>
+
+  <h2>The extension</h2>
+  <p>The frame grabber runs only inside YouTube players embedded on the Dive iNat site. It copies frames from the video that's
+    already playing and hands them to the page. It has no network access, stores nothing, and does nothing on any other site,
+    including youtube.com itself.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or problems: <a href="https://github.com/notionparallax/inat-workflow/issues">open an issue on GitHub</a>.</p>
+</main>
+</body>
+</html>

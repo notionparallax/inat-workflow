@@ -1,6 +1,7 @@
 <script>
   // Setup (SPEC §14): video, dive log, token, extension, permission.
   import { clock } from "../lib/dive.js";
+  import { EXTENSION_STORE_URL, EXTENSION_ZIP_URL } from "../lib/config.js";
 
   let { video, videoInput = $bindable(""), me, meError, extension, playing, onVideo, onDiveFile, onToken,
         onPermission, onClearSync, onPickDive, diveChoices = [], tokenLeft = null, permissionOk = false } = $props();
@@ -44,11 +45,12 @@
         </dd>
       </dl>
       <h4>Sync</h4>
-      <p class="small">Pause on the frame where you go under and press <kbd>D</kbd>; on the frame where you surface, press <kbd>A</kbd>.
+      <p class="small">The log marks the descent where your computer first goes deeper than {dive.threshold_m} m, and the surface where it last comes shallower than {dive.threshold_m} m
+        (so bobbing about near the top afterwards doesn't matter). Pause on the matching frames and press <kbd>D</kbd> and <kbd>S</kbd>.
         If the video starts or ends mid-dive, set one and drag the profile to line it up.</p>
       <dl>
         <dt>Descent</dt><dd>{video.sync.descentVid != null ? `video ${clock(video.sync.descentVid)} = log ${clock(dive.descent_s)}` : "not set"}</dd>
-        <dt>Ascent</dt><dd>{video.sync.ascentVid != null ? `video ${clock(video.sync.ascentVid)} = log ${clock(dive.ascent_s)}` : "not set"}</dd>
+        <dt>Surface</dt><dd>{video.sync.ascentVid != null ? `video ${clock(video.sync.ascentVid)} = log ${clock(dive.ascent_s)}` : "not set"}</dd>
         {#if video.sync.descentVid != null || video.sync.ascentVid != null}
           {#if !(video.sync.descentVid != null && video.sync.ascentVid != null)}
             <dt>Stretch</dt><dd>{(((video.sync.scale || 1) - 1) * 100).toFixed(2)} % (drag the profile to adjust)</dd>
@@ -70,7 +72,7 @@
       <p class="warn small">{meError}</p>
     {/if}
     <p class="small">Get {me ? "a new" : "a"} token from <a href="https://www.inaturalist.org/users/api_token" target="_blank" rel="noreferrer">https://www.inaturalist.org/users/api_token</a>
-      (tokens last 24 hours) and paste it here.</p>
+      (tokens last 24 hours) and paste it here. It's kept in this browser only.</p>
     <form onsubmit={(e) => { e.preventDefault(); onToken(tokenInput); tokenInput = ""; }}>
       <input placeholder="Paste API token" bind:value={tokenInput} />
       <button>{me ? "Replace" : "Save"}</button>
@@ -92,8 +94,10 @@
       <button onclick={extension.requestQuality}>Ask player for 2160p</button>
       {#if extension.qualityNote}<p class="small muted">{extension.qualityNote}</p>{/if}
     {:else}
-      <p class="warn small">Not detected{playing ? "" : " yet (start the video)"}. Install it from the <code>extension</code> folder: open
-        <code>chrome://extensions</code>, turn on Developer mode, choose “Load unpacked” and pick the folder, then reload this page.</p>
+      <p class="warn small">Not detected{playing ? "" : " yet (start the video)"}.
+        {#if EXTENSION_STORE_URL}<a href={EXTENSION_STORE_URL} target="_blank" rel="noreferrer">Add it to Chrome</a>, then reload this page.
+        {:else}<a href={EXTENSION_ZIP_URL} download>Download it</a> and unzip it, open <code>chrome://extensions</code>, turn on Developer mode,
+          choose “Load unpacked” and pick the folder, then reload this page.{/if}</p>
     {/if}
   </div>
 

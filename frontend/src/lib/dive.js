@@ -1,5 +1,5 @@
 // Sync and interpolation in the browser, for live display (SPEC §8).
-// The back end recomputes the authoritative values on upload.
+// Also builds the values sent to iNaturalist on upload.
 
 /** (a, b) for t_log = a * t_vid + b from anchor pairs [[t_vid, t_log], ...]. */
 export function solveSync(points) {
@@ -99,7 +99,7 @@ export function videoIdFrom(input) {
   return null;
 }
 
-/** 3 × 3 region name for a point in percent, matching the back end. */
+/** 3 × 3 region name for a point in percent. */
 export function region(x, y) {
   const cols = ["left", "centre", "right"], rows = ["upper", "middle", "lower"];
   const col = cols[Math.min(2, Math.floor(x / (100 / 3)))];
@@ -114,4 +114,30 @@ export function cropRect(frameW, frameH, px, py, w, h) {
   const x = Math.round(Math.min(Math.max(px - cw / 2, 0), frameW - cw));
   const y = Math.round(Math.min(Math.max(py - ch / 2, 0), frameH - ch));
   return { x, y, w: cw, h: ch };
+}
+
+/** "01:52:20" from seconds. */
+export function formatClock(seconds) {
+  const s = Math.round(seconds);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+}
+
+/** Time, depth and temperature for an observation at log time `tLog` (SPEC §8). */
+export function observationValues(dive, tLog, utcOffset = null) {
+  const offset = utcOffset || dive.utc_offset;
+  let observed = null;
+  if (dive.start_local) {
+    const ms = Date.parse(dive.start_local + "Z") + Math.round(tLog) * 1000;
+    observed = new Date(ms).toISOString().slice(0, 19) + (offset || "");
+  }
+  const depth = interpolate(dive.samples || [], tLog, "depth");
+  const temp = interpolate(dive.samples || [], tLog, "temp");
+  return {
+    observed_on: observed,
+    depth_m: depth != null ? Math.round(depth * 10) / 10 : null,
+    temp_c: temp != null ? Math.round(temp) : null,
+    dive_time: tLog >= 0 ? formatClock(tLog) : null,
+    in_log: depth != null,
+  };
 }

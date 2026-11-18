@@ -1,7 +1,7 @@
 // UI smoke test: starts from the hard-coded development defaults (video, dive,
 // permission), checks setup collapses, exercises sync scaling, and opens the
-// frame picker with synthetic frames. Needs both servers running (backend on
-// :8000, frontend dev server on :5173). Doesn't need the extension.
+// frame picker with synthetic frames. Needs the frontend dev server running
+// (npm run dev, on :5173). Doesn't need the extension.
 import { chromium } from "playwright";
 import path from "node:path";
 import fs from "node:fs";
@@ -17,7 +17,27 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error" && !m.text().includes("youtube")) errors.push(m.text()); });
 
+// iNaturalist is mocked: a logged-in test user, and any write is recorded (a
+// dry run must not make one).
+const inatWrites = [];
+const fakeToken = `x.${Buffer.from(JSON.stringify({ user_id: 1, exp: Math.floor(Date.now() / 1000) + 86400 })).toString("base64url")}.y`;
+await page.addInitScript((t) => localStorage.setItem("dive-inat:token", t), fakeToken);
+await page.route("https://api.inaturalist.org/**", (route) => {
+  const req = route.request();
+  if (req.method() !== "GET") inatWrites.push(`${req.method()} ${req.url()}`);
+  const url = new URL(req.url());
+  const body = url.pathname.endsWith("/users/me")
+    ? { results: [{ id: 1, login: "smoke-test", name: "Smoke Test", preferred_observation_license: "cc-by-nc", preferred_photo_license: "cc-by-nc" }] }
+    : { results: [] };
+  route.fulfill({ status: 200, contentType: "application/json", headers: { "Access-Control-Allow-Origin": "*" }, body: JSON.stringify(body) });
+});
+
 await page.goto("http://localhost:5173/");
+// First visit: the introduction opens; close it.
+await page.waitForSelector("dialog.intro[open]", { timeout: 10000 });
+await page.screenshot({ path: path.join(out, "ui-intro.png") });
+await page.getByRole("button", { name: "Get started" }).click();
+const introClosed = (await page.locator("dialog.intro").count()) === 0;
 await page.waitForSelector(".timeline svg path.profile", { timeout: 20000 });
 const drawerOpen = await page.locator(".drawer").count();
 await page.screenshot({ path: path.join(out, "ui-main.png") });
@@ -87,6 +107,6 @@ await page.locator(".row.dry-run summary").first().click();
 await page.screenshot({ path: path.join(out, "ui-after-upload.png"), fullPage: true });
 const preview = await page.locator(".row.dry-run pre").first().innerText();
 
-console.log(JSON.stringify({ drawerOpen, sync, cropLabel, selected, extended, gifMs, gifInfo, gifReplaced, errors }, null, 2));
+console.log(JSON.stringify({ inatWrites, introClosed, drawerOpen, sync, cropLabel, selected, extended, gifMs, gifInfo, gifReplaced, errors }, null, 2));
 console.log(preview);
 await browser.close();

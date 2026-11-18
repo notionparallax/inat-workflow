@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Dive iNat: a fish caught in a camera viewfinder -->
+  <rect width="32" height="32" rx="7" fill="#0b5f86"/>
+  <!-- viewfinder corner brackets -->
+  <path d="M4.5 11V4.5H11M21 4.5h6.5V11M27.5 21v6.5H21M11 27.5H4.5V21"
+        fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- fish, facing left -->
+  <path d="M7.5 16c2.2-3.6 5-5 8-5 2.3 0 4.2.9 5.8 2.4L25 10.5v11l-3.7-2.9c-1.6 1.5-3.5 2.4-5.8 2.4-3 0-5.8-1.4-8-5z"
+        fill="#ffcf3f"/>
+  <circle cx="12" cy="15.2" r="1.4" fill="#0b5f86"/>
+</svg>

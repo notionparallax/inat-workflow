@@ -7,9 +7,12 @@
 (() => {
   "use strict";
 
-  const VERSION = "0.2.0";
-  // Pages allowed to use the grabber. Add the hosted domain here once registered.
-  const ALLOWED_PARENTS = [/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
+  const VERSION = "0.3.0";
+  // Pages allowed to use the grabber: the hosted site, and local development.
+  const ALLOWED_PARENTS = [
+    /^https:\/\/notionparallax\.github\.io$/,
+    /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
+  ];
   const FROM_PAGE = "dive-inat";
   const TO_PAGE = "dive-inat-grabber";
   // Keys forwarded to the tool when focus is inside the player (§13).
