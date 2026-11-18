@@ -136,16 +136,16 @@ test("chapters", () => {
     { video_time: 200, observation: obs(null) },
   ]);
   assert.deepEqual(out.text.split("\n"), [
-    "00:00 Descent",
-    "03:12 Red algae (Rhodophyta) / Unidentified – see iNaturalist",
-    "07:45 Weedy seadragon (Phyllopteryx taeniolatus)",
+    "0:00 Descent",
+    "3:12 Red algae (Rhodophyta) / Unidentified – see iNaturalist",
+    "7:45 Weedy seadragon (Phyllopteryx taeniolatus)",
   ]);
   assert.deepEqual(out.warnings, []);
   const hours = buildChapters([
     { video_time: 4000, observation: obs(SEA, "research") },
     { video_time: 300, observation: obs(null) },
   ], { research_only: true });
-  assert.deepEqual(hours.text.split("\n"), ["0:00:00 Descent", "1:06:38 Weedy seadragon (Phyllopteryx taeniolatus)"]);
+  assert.deepEqual(hours.text.split("\n"), ["0:00 Descent", "1:06:38 Weedy seadragon (Phyllopteryx taeniolatus)"]);
   assert.ok(hours.warnings.length);
 });
 
@@ -179,8 +179,8 @@ test("chapters with iNaturalist links", () => {
     { video_time: 100, observation: { id: 13, ...obs(null) } },
   ], { links: true });
   assert.deepEqual(out.text.split("\n"), [
-    "00:00 Descent",
-    "01:38 Unidentified – see iNaturalist https://inaturalist.org/observations/13",
-    "07:45 Weedy seadragon (Phyllopteryx taeniolatus) https://inaturalist.org/observations/11 https://inaturalist.org/observations/12",
+    "0:00 Descent",
+    "1:38 Unidentified – see iNaturalist https://inaturalist.org/observations/13",
+    "7:45 Weedy seadragon (Phyllopteryx taeniolatus) https://inaturalist.org/observations/11 https://inaturalist.org/observations/12",
   ]);
 });

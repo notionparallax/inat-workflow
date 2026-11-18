@@ -19,11 +19,12 @@ export function taxonTitle(obs, unidentified) {
   return taxon.name;
 }
 
-export function formatTs(seconds, withHours) {
+/** Shortest form YouTube accepts: 0:00, 7:04, 1:10:18. */
+export function formatTs(seconds) {
   const total = Math.trunc(seconds);
   const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), r = total % 60;
   const pad = (n) => String(n).padStart(2, "0");
-  return withHours ? `${h}:${pad(m)}:${pad(r)}` : `${pad(m)}:${pad(r)}`;
+  return h ? `${h}:${pad(m)}:${pad(r)}` : `${m}:${pad(r)}`;
 }
 
 // The short form (it redirects to www.) saves room in the 5,000-character description.
@@ -68,9 +69,8 @@ export function buildChapters(items, {
 
   const warnings = [];
   if (chapters.length < 3) warnings.push("YouTube needs at least three chapters; these won't show as chapters yet.");
-  const withHours = chapters.some((c) => c.t >= 3600);
   const out = chapters.map((c) => ({ t: c.t, title: c.titles.join(" / ") }));
-  const text = out.map((c) => `${c.t === 0 && !withHours ? "00:00" : formatTs(c.t, withHours)} ${c.title}`).join("\n");
+  const text = out.map((c) => `${formatTs(c.t)} ${c.title}`).join("\n");
   if (text.length > DESCRIPTION_LIMIT * 0.8) {
     warnings.push(`These chapters are ${text.length.toLocaleString("en")} characters, and a YouTube description can hold ${DESCRIPTION_LIMIT.toLocaleString("en")} in all.` +
                   (links ? " Turning off the iNaturalist links makes them much shorter." : ""));

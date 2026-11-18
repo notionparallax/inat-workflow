@@ -395,7 +395,7 @@ A few days after uploading, once identifications on iNat have settled, the tool 
 
 ### 12.2 Chapter rules
 
-YouTube only recognises chapters if: the first starts at `00:00`, there are at least three, and each lasts at least 10 seconds. The tool therefore:
+YouTube only recognises chapters if: the first starts at `0:00`, there are at least three, and each lasts at least 10 seconds. The tool therefore:
 
 - adds a first chapter at `00:00` (default "Descent", editable);
 - merges observations closer than 10 s into one chapter ("Old wife / Blue groper");
@@ -410,9 +410,9 @@ YouTube only recognises chapters if: the first starts at `00:00`, there are at l
 ### 12.4 Output
 
 ```txt
-00:00 Descent
-03:12 Sponge garden – Red algae (Rhodophyta)
-07:45 Weedy seadragon (Phyllopteryx taeniolatus)
+0:00 Descent
+3:12 Sponge garden – Red algae (Rhodophyta)
+7:45 Weedy seadragon (Phyllopteryx taeniolatus)
 ...
 ```
 
