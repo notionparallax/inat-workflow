@@ -173,7 +173,7 @@ The web page remains the app. A small companion browser extension (the "frame gr
 - **Size.** Roughly 100–200 lines plus a manifest, with no settings, network access or storage of its own.
 - **Trusted origins.** `https://notionparallax.github.io` (the hosted site) and `localhost` (development). A custom domain later means a new extension version. No other page can talk to the extension.
 - **Browsers.** Chrome only (Manifest V3; Edge also runs it). A Firefox port is mostly the same code if it's wanted later.
-- **Distribution.** Soft launch: the site offers the extension as a zip (built from `extension/` by `npm run build`) to load unpacked. Next: published on the Chrome Web Store (one-off developer fee, review). Google bars extensions that download YouTube videos. This one copies frames from a video that's already playing, in the same way as many screenshot extensions already on the store, but the listing should say so plainly.
+- **Distribution.** Published in the Chrome Web Store on 19 November 2026 ("Dive iNat frame grabber"), which the intro and Setup link to. The site still builds a zip of `extension/` for store uploads. Google bars extensions that download YouTube videos. This one copies frames from a video that's already playing, in the same way as many screenshot extensions already on the store, and the listing says so plainly.
 
 ### 7.3 Burst capture and sharpness ranking
 

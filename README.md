@@ -31,7 +31,10 @@ In development the tool starts with a sample video and dive (`src/lib/devDefault
 
 **Chrome Web Store:** upload `frontend/dist/dive-inat-extension.zip` (made by `npm run build`). Icons are in
 `extension/icons/`, store tiles in `store/`, and the privacy policy is the site's `privacy.html`. Graphics are made by
-`scripts/render-graphics.mjs`. Once the listing is live, set `EXTENSION_STORE_URL` in `frontend/src/lib/config.js`.
+`scripts/render-graphics.mjs`. The listing is
+[Dive iNat frame grabber](https://chromewebstore.google.com/detail/dive-inat-frame-grabber/nlecoipnfjnedajcjdlagpolhaehjcdl);
+its link is `EXTENSION_STORE_URL` in `frontend/src/lib/config.js`. For an update, bump the version in
+`extension/manifest.json` and `extension/grabber.js`, build, and upload the new zip.
 
 ## Using it
 
