@@ -3,7 +3,7 @@
   import { api } from "../lib/api.js";
 
   let { video, settings, me } = $props();
-  let opts = $state({ first_title: "Descent", research_only: false, include_unidentified: true });
+  let opts = $state({ first_title: "Descent", research_only: false, include_unidentified: true, links: true });
   let result = $state(null);
   let error = $state(null);
   let loading = $state(false);
@@ -36,6 +36,7 @@
     <label>First chapter <input bind:value={opts.first_title} /></label>
     <label class="check"><input type="checkbox" bind:checked={opts.research_only} /> Research grade only</label>
     <label class="check"><input type="checkbox" bind:checked={opts.include_unidentified} /> Include unidentified</label>
+    <label class="check"><input type="checkbox" bind:checked={opts.links} /> iNaturalist links</label>
     <button class="primary" onclick={generate} disabled={loading}>{loading ? "Fetching…" : "Generate chapters"}</button>
   </div>
   {#if error}<p class="warn">{error}</p>{/if}

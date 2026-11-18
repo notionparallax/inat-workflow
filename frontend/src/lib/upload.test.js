@@ -171,3 +171,16 @@ test("client retries reads on server errors", async () => {
   const c = new Client({ token: "t", sleep: async () => {}, fetch: async () => replies.shift() });
   assert.deepEqual(await c.me(), { id: 7 });
 });
+
+test("chapters with iNaturalist links", () => {
+  const out = buildChapters([
+    { video_time: 467, observation: { id: 11, ...obs(SEA, "research") } },
+    { video_time: 470, observation: { id: 12, ...obs(SEA) } },
+    { video_time: 100, observation: { id: 13, ...obs(null) } },
+  ], { links: true });
+  assert.deepEqual(out.text.split("\n"), [
+    "00:00 Descent",
+    "01:38 Unidentified – see iNaturalist https://inaturalist.org/observations/13",
+    "07:45 Weedy seadragon (Phyllopteryx taeniolatus) https://inaturalist.org/observations/11 https://inaturalist.org/observations/12",
+  ]);
+});

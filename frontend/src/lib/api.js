@@ -163,7 +163,7 @@ async function upload(m, photos) {
 
 async function chapters(body) {
   const { video_id, items = [], search_if_empty = true, user_id = null, lead_in = 2, first_title = "Descent",
-          research_only = false, include_unidentified = true } = body;
+          research_only = false, include_unidentified = true, links = false } = body;
   let found, source;
   try {
     if (items.length) {
@@ -183,7 +183,7 @@ async function chapters(body) {
       source = "none";
     }
   } catch (e) { throw fromINat(e); }
-  const result = buildChapters(found, { lead_in, first_title, research_only, include_unidentified });
+  const result = buildChapters(found, { lead_in, first_title, research_only, include_unidentified, links });
   result.source = source;
   result.observations = found.map((i) => ({
     id: i.observation.id, video_time: i.video_time, quality_grade: i.observation.quality_grade, taxon: i.observation.taxon?.name ?? null,

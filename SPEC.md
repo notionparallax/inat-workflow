@@ -405,7 +405,7 @@ YouTube only recognises chapters if: the first starts at `00:00`, there are at l
 
 - Default format: common name (scientific name), e.g. `Weedy seadragon (Phyllopteryx taeniolatus)`. Falls back to the scientific name, or to the coarsest rank if not identified to species (e.g. `Nudibranchs (Nudibranchia)`).
 - Options: include only research-grade observations; include or omit unidentified ones ("Unidentified – see iNat").
-- Optionally, the description block ends with a link to the observations on iNat.
+- Each name is followed by its observation's iNat link (`https://inaturalist.org/observations/<id>`; on by default, can be turned off). Same-species observations merged into one chapter list all their links. Links make the block much longer, and a YouTube description holds 5,000 characters in all, so the tool warns past 4,000.
 
 ### 12.4 Output
 
