@@ -551,7 +551,7 @@
     if (introOpen || e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = e.target?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    const handled = [" ", "k", "j", "l", "x", "r", "g", "ArrowLeft", "ArrowRight", ",", ".", "<", ">", "n", "m", "c", "d", "a", "Escape", "Enter",
+    const handled = [" ", "k", "j", "l", "x", "r", "g", "ArrowLeft", "ArrowRight", ",", ".", "<", ">", "n", "m", "c", "d", "s", "a", "Escape", "Enter",
                      "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
     const key = e.key.length === 1 && !["<", ">"].includes(e.key) ? e.key.toLowerCase() : e.key;
     if (!handled.includes(key)) return;

@@ -57,6 +57,7 @@ annotations, **Enter** uploads. The **Shortcuts** button lists every key.
 - `test-grabber.mjs` tries the extension against a real video. YouTube currently shows automated browsers a
   “confirm you're not a bot” screen, so the real extension test has to be done by hand in your own Chrome.
 - `render-graphics.mjs` renders the favicon, extension icons, store tiles and link-preview image.
+- `store-screenshot.mjs` takes a 1280×800 main-view screenshot for the store (needs `npm run dev` running).
 
 ## Layout
 

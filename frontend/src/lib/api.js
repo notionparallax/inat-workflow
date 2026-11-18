@@ -57,13 +57,16 @@ async function setToken(raw) {
     try { token = JSON.parse(token).api_token; } catch { token = null; }
     if (!token) throw fail("That doesn't look like an iNaturalist API token.", 400);
   }
+  // Check the new token before replacing the current one, so a bad paste
+  // doesn't log you out.
+  const previous = client.token;
   client.token = token;
   try {
     const user = await me();
     writeToken(token);
     return user;
   } catch (e) {
-    if (e.status === 401) { client.token = null; writeToken(null); }
+    client.token = previous;
     throw e;
   }
 }

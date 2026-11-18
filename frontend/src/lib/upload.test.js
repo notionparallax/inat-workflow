@@ -154,3 +154,20 @@ test("video time from description", () => {
   assert.equal(videoTimeFromDescription(d, "MRja6VhCmMs"), 754);
   assert.equal(videoTimeFromDescription(d, "otherVideo1"), null);
 });
+
+test("client doesn't repeat a write that may have happened", async () => {
+  let calls = 0;
+  const c502 = new Client({ token: "t", sleep: async () => {}, fetch: async () => { calls++; return response(502); } });
+  await assert.rejects(c502.createObservation({ observation: {} }), (e) => e.status === 502);
+  assert.equal(calls, 1);
+  calls = 0;
+  const lost = new Client({ token: "t", sleep: async () => {}, fetch: async () => { calls++; throw new TypeError("Failed to fetch"); } });
+  await assert.rejects(lost.createObservation({ observation: {} }), /Network error/);
+  assert.equal(calls, 1);
+});
+
+test("client retries reads on server errors", async () => {
+  const replies = [response(500), response(200, { results: [{ id: 7 }] })];
+  const c = new Client({ token: "t", sleep: async () => {}, fetch: async () => replies.shift() });
+  assert.deepEqual(await c.me(), { id: 7 });
+});

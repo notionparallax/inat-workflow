@@ -42,9 +42,16 @@ export function tokenExpiry(token) {
 
 const realSleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
 
-/** Minimal client with throttling (≈1 request/s, iNat's guideline) and retries. */
+// Statuses where iNat hasn't acted on the request, so even a POST is safe to repeat.
+const NOT_PROCESSED = new Set([429, 503]);
+
+/** Minimal client with throttling (≈1 request/s, iNat's guideline) and retries.
+ *  GETs are retried on network errors, 429 and 5xx. Writes are retried only on
+ *  429 and 503: after a lost response or a 500/502/504 the write may already
+ *  have happened, and repeating it could make a duplicate observation. */
 export class Client {
-  constructor({ token = null, minInterval = 1, retries = 3, fetch: f = (...a) => globalThis.fetch(...a), sleep = realSleep } = {}) {
+  constructor({ token = null, minInterval = 1, retries = 3, timeoutS = 120, fetch: f = (...a) => globalThis.fetch(...a), sleep = realSleep } = {}) {
+    this.timeoutS = timeoutS;
     this.token = token;
     this.minInterval = minInterval;
     this.retries = retries;
@@ -82,14 +89,17 @@ export class Client {
       const wait = this.minInterval - (Date.now() - this._last) / 1000;
       if (wait > 0) await this._sleep(wait);
       this._last = Date.now();
+      const safe = method === "GET";
       let resp;
       try {
-        resp = await this._fetch(url.toString(), { method, headers, body });
+        // A stalled request would otherwise hold up every later one in the queue.
+        resp = await this._fetch(url.toString(), { method, headers, body, signal: AbortSignal.timeout(this.timeoutS * 1000) });
       } catch (e) {
-        if (attempt < this.retries) { attempt++; await this._sleep(2 ** attempt); continue; }
-        throw new INatError(`Network error talking to iNaturalist: ${e.message}`);
+        if (safe && attempt < this.retries) { attempt++; await this._sleep(2 ** attempt); continue; }
+        const what = e.name === "TimeoutError" ? `no answer after ${this.timeoutS} s` : e.message;
+        throw new INatError(`Network error talking to iNaturalist: ${what}`);
       }
-      if ((resp.status === 429 || resp.status >= 500) && attempt < this.retries) {
+      if ((NOT_PROCESSED.has(resp.status) || (safe && resp.status >= 500)) && attempt < this.retries) {
         attempt++;
         await this._sleep(2 ** attempt);
         continue;
